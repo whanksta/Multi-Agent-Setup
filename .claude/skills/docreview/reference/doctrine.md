@@ -20,8 +20,8 @@ The whole doctrine rests on *when* a doc enters the context window:
 
 - **Always-loaded.** The root instruction file loads in full at launch **and re-injects after
   `/compact`**. It's the only guaranteed-present layer. That file is `CLAUDE.md` — and via the
-  `AGENTS.md` symlink + the `GEMINI.md` import it's *also* what Codex, Antigravity, and Gemini
-  load. So every line in `CLAUDE.md` is paid per turn by **four** agents. Budget hard.
+  `AGENTS.md` symlink it's *also* what Codex and Antigravity load. So every line in `CLAUDE.md`
+  is paid per turn by **three** agents. Budget hard.
 - **Scoped / on-demand.** A `*/CLAUDE.md` (or `.claude/rules/` file) loads only when an agent
   touches that folder, and **does NOT survive `/compact`**. A rule that must hold *everywhere*
   but lives only in a scoped file will be silently missed — that's a BLOCKER (axis 6 / C6).
@@ -91,7 +91,7 @@ Run every axis against each in-scope doc. Each has a one-line catch and a verify
 **1 — Trim.** Bloat; walls of text that should be tables; rationale dumps where a pointer would do.
 Size-budget violations on always-loaded files.
 ```sh
-for f in CLAUDE.md GEMINI.md .claude/rules/*.md; do printf "%-32s %s\n" "$f" "$(grep -cE '[^[:space:]]' "$f" 2>/dev/null)"; done
+for f in CLAUDE.md .claude/rules/*.md; do printf "%-32s %s\n" "$f" "$(grep -cE '[^[:space:]]' "$f" 2>/dev/null)"; done
 ```
 
 **2 — Tighten.** Restatement of parent doctrine in a child doc; scope creep; imprecise wording;
@@ -100,7 +100,7 @@ Judgment axis — open the linked doc and compare.
 
 **3 — Conflict.** Cross-doc contradictions (same fact stated two ways) + internal contradictions.
 ```sh
-grep -nE "<term-A>|<term-B>" CLAUDE.md GEMINI.md docs/*.md
+grep -nE "<term-A>|<term-B>" CLAUDE.md docs/*.md
 ```
 Resolve by authority: the doc that owns the topic wins; rewrite the loser.
 
@@ -114,7 +114,7 @@ grep -rnE "(Variant1|Variant2)" .   # then pick canonical, re-sweep to confirm z
 "as of <date>" aged, resolved items still listed open). *Volatile* = facts that WILL rot and
 shouldn't be in always-loaded doctrine at all (dates, versions, owners, "currently using X").
 ```sh
-grep -rnE "as of [0-9]{4}-[0-9]{2}-[0-9]{2}|currently|recently" CLAUDE.md GEMINI.md docs/
+grep -rnE "as of [0-9]{4}-[0-9]{2}-[0-9]{2}|currently|recently" CLAUDE.md docs/
 ```
 Stale → update/remove. Volatile → move to git history / CHANGELOG / a live-state doc + leave a stable rule.
 
@@ -124,7 +124,7 @@ genuinely-broad content up. Collapse pointer-only headings.
 
 **7 — Reachability.** Broken file links, dead anchors, unexpanded acronyms.
 ```sh
-grep -hoE "\]\([^)]+\.md[^)]*\)" CLAUDE.md GEMINI.md docs/*.md \
+grep -hoE "\]\([^)]+\.md[^)]*\)" CLAUDE.md docs/*.md \
   | sed -E 's/^\]\(//; s/\)$//' | sort -u \
   | while read l; do f="${l%%#*}"; [ -z "$f" ] || [ -e "$f" ] || echo "MISSING: $l"; done
 ```
@@ -194,9 +194,7 @@ The wiring this kit uses changes how a few axes apply:
 
 - **`AGENTS.md` is a symlink to `CLAUDE.md`** — never audit it as a separate file; auditing
   `CLAUDE.md` covers it. (The wiring check in Part 1 confirms the link itself.)
-- **`GEMINI.md` holds edges only.** It imports `@./CLAUDE.md`; it must NOT restate shared rules
-  (OR5 / axis 2). If it duplicates a shared rule, that's a finding — collapse to the import.
-- **CLAUDE.md's budget matters 4×.** It's the always-loaded file for Claude *and* (via symlink/
-  import) Codex, Antigravity, and Gemini. Trim wins here pay off four times.
+- **CLAUDE.md's budget matters 3×.** It's the always-loaded file for Claude *and* (via the symlink)
+  Codex and Antigravity. Trim wins here pay off three times.
 - **Secrets compound on sync/public repos (C9).** A leaked credential in any instruction file is a
   BLOCKER — more so if the repo syncs to cloud storage or is published.

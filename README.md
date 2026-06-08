@@ -1,10 +1,10 @@
 # MultiAgentSetup
 
 A drop-in starter kit for repos worked on by **multiple AI coding agents** — Claude Code, Codex
-CLI, Gemini CLI, and Antigravity. It keeps **one source of truth** for shared rules, **survives
-cloud sync** (OneDrive / Google Drive / Dropbox), and **self-heals** when an agent's atomic-save
-breaks the wiring. It also ships a `docreview` skill that audits your docs against a doc-quality
-rubric.
+(CLI + desktop), and Antigravity (CLI + desktop). It keeps **one source of truth** for shared
+rules, **survives cloud sync** (OneDrive / Google Drive / Dropbox), and **self-heals** when an
+agent's atomic-save breaks the wiring. It also ships a `docreview` skill that audits your docs
+against a doc-quality rubric.
 
 Everything here is the deliverable — copy these files into your repo and you're set.
 
@@ -13,7 +13,6 @@ Everything here is the deliverable — copy these files into your repo and you'r
 ```
 CLAUDE.md                              canonical rules — every agent reads this (edit per project)
 AGENTS.md → CLAUDE.md                  symlink: Codex + Antigravity read the rules through it
-GEMINI.md                              imports @./CLAUDE.md + Gemini/Antigravity edges only
 .gitignore                             ignores CLAUDE.local.md + clobbered-symlink backups
 scripts/docreview.sh                   verify + auto-repair the wiring (every agent + hooks/CI run this)
 .claude/skills/docreview/
@@ -25,19 +24,21 @@ scripts/docreview.sh                   verify + auto-repair the wiring (every ag
 ## Why it works this way
 
 **Claude Code is the primary agent, so `CLAUDE.md` is canonical** — it holds all shared rules.
-Every other agent's file points back to it; they collaborate, they don't own the rulebook.
+Every other agent reads it through `AGENTS.md`; they collaborate, they don't own the rulebook.
 
-| Agent | Reads | `@import`? |
-|-------|-------|------------|
-| Claude Code (primary) | `CLAUDE.md` | yes |
-| Codex CLI | `AGENTS.md` | no |
-| Gemini CLI | `GEMINI.md` | yes |
-| Antigravity | `AGENTS.md` | no |
+| Agent | Reads | How |
+|-------|-------|-----|
+| Claude Code (primary) | `CLAUDE.md` | native |
+| Codex (CLI + desktop) | `AGENTS.md` | symlink → `CLAUDE.md` |
+| Antigravity (CLI + desktop) | `AGENTS.md` | symlink → `CLAUDE.md` |
 
-Codex and Antigravity can't auto-`@import`, so `AGENTS.md` is a **symlink** to `CLAUDE.md` — they
-read the canonical bytes directly. Gemini *can* import, so `GEMINI.md` imports `@./CLAUDE.md` and
-adds only Gemini/Antigravity edges. Claude owns `CLAUDE.md` natively, with Claude-only rules in
-`.claude/rules/`.
+`AGENTS.md` is the cross-tool standard both Codex and Antigravity read, but neither resolves an
+`@import`. So `AGENTS.md` is a **symlink** to `CLAUDE.md` — they read the canonical bytes directly,
+with zero duplication. Claude owns `CLAUDE.md` natively, with Claude-only rules in `.claude/rules/`.
+
+> **No Gemini?** Google retired Gemini CLI on 2026-06-18, replacing it with Antigravity (a closed-
+> source rewrite) that reads `AGENTS.md`. So Google's agent is covered by the symlink too — a
+> separate `GEMINI.md` is no longer needed.
 
 ### Cloud sync + symlinks (the part people get wrong)
 - OneDrive / Google Drive on macOS **preserve and sync symlinks** (verified) — the "OneDrive
@@ -65,7 +66,7 @@ budgets, scope placement, drift, broken links, and CLAUDE.md/SKILL.md authoring 
 ```bash
 SRC=path/to/MultiAgentSetup; DST=.
 mkdir -p "$DST"/{scripts,.claude/skills}
-cp "$SRC"/CLAUDE.md "$SRC"/GEMINI.md "$DST"/        # then replace CLAUDE.md's rules with yours
+cp "$SRC"/CLAUDE.md "$DST"/                          # then replace CLAUDE.md's rules with yours
 cp "$SRC"/scripts/docreview.sh "$DST"/scripts/
 cp -r "$SRC"/.claude/skills/docreview "$DST"/.claude/skills/
 cat "$SRC"/.gitignore >> "$DST"/.gitignore          # or merge by hand
@@ -93,28 +94,26 @@ CLAUDE.md as the single canonical rulebook the other agents point at. Do all of 
 
 1. CLAUDE.md (REAL, canonical): keep it if present; else create it with a short project
    description + a "Canonical instructions file" section stating CLAUDE.md is canonical (edited
-   here), AGENTS.md is a symlink to it, GEMINI.md imports it + holds Gemini edges, .claude/rules/
-   is Claude-only, never write to AGENTS.md, run /docreview after edits. If shared rules currently
-   live in AGENTS.md / .cursorrules / elsewhere, consolidate them into CLAUDE.md first.
+   here), AGENTS.md is a symlink to it, .claude/rules/ is Claude-only, never write to AGENTS.md,
+   run /docreview after edits. If shared rules currently live in AGENTS.md / .cursorrules /
+   elsewhere, consolidate them into CLAUDE.md first.
 2. AGENTS.md: delete any existing file, then  ln -snf CLAUDE.md AGENTS.md
-3. GEMINI.md (REAL): first line "@./CLAUDE.md", then a short Gemini/Antigravity edges section. Do
-   NOT duplicate shared rules — they're imported.
-4. scripts/docreview.sh: create the verify/auto-repair script that enforces this topology
-   (CLAUDE.md real canonical; AGENTS.md symlink→CLAUDE.md, re-linking and backing up a clobbered
-   diverging AGENTS.md to AGENTS.md.clobbered-<ts>; GEMINI.md real file importing @./CLAUDE.md; no
-   circular @./AGENTS.md). chmod +x it.
-5. .claude/skills/docreview/SKILL.md: a "docreview" skill that runs bash scripts/docreview.sh,
+3. scripts/docreview.sh: create the verify/auto-repair script that enforces this topology
+   (CLAUDE.md real canonical; AGENTS.md symlink→CLAUDE.md, creating it if missing and re-linking +
+   backing up a clobbered diverging AGENTS.md to AGENTS.md.clobbered-<ts>; no circular @./AGENTS.md
+   in CLAUDE.md). chmod +x it.
+4. .claude/skills/docreview/SKILL.md: a "docreview" skill that runs bash scripts/docreview.sh,
    reports the result, handles AGENTS.md.clobbered-* backups (summarize the diff, ask before
    folding in), and re-runs to confirm PASS.
-6. .gitignore: add CLAUDE.local.md and AGENTS.md.clobbered-*.
-7. Run bash scripts/docreview.sh, confirm "docreview: PASS", then summarize and remind me to edit
+5. .gitignore: add CLAUDE.local.md and AGENTS.md.clobbered-*.
+6. Run bash scripts/docreview.sh, confirm "docreview: PASS", then summarize and remind me to edit
    shared rules only in CLAUDE.md.
 
-Context: Codex CLI + Antigravity read AGENTS.md but can't auto-@import, which is why AGENTS.md is a
-symlink (they read CLAUDE.md's bytes directly). Gemini CLI + Claude Code DO support @import. The
-only fragility is an atomic-save turning the symlink into a regular file — docreview repairs that.
-OneDrive/Google Drive on macOS preserve symlinks; git stores them mode 120000; Windows needs
-Developer Mode + core.symlinks=true.
+Context: Codex (CLI + desktop) + Antigravity (CLI + desktop) read AGENTS.md but can't auto-@import,
+which is why AGENTS.md is a symlink (they read CLAUDE.md's bytes directly). Claude Code reads
+CLAUDE.md natively. The only fragility is an atomic-save turning the symlink into a regular file —
+docreview repairs that. OneDrive/Google Drive on macOS preserve symlinks; git stores them mode
+120000; Windows needs Developer Mode + core.symlinks=true.
 ```
 
 ## License
