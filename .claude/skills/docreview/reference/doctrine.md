@@ -72,9 +72,9 @@ Classify each finding **BLOCKER** (breaks loading/correctness) / **SHOULD** (deg
 | Axis | Catch | Threshold / verify |
 |------|-------|--------------------|
 | **C1 Size** | Bloat dilutes adherence | < 200 non-blank lines (root). Cut anything learnable in one session (file locations, obvious commands); move occasional-reference material behind a pointer. |
-| **C2 Specificity + imperative** | Vague / observational rules | Concrete + verifiable, not aspirational. Direct commands ("never X") not observations ("we generally don't"). Mark load-bearing rules `IMPORTANT`/`YOU MUST`. Include **negative** rules, not only positive. |
+| **C2 Specificity + imperative** | Vague / observational rules | Concrete + verifiable, not aspirational. Direct commands ("never X") not observations ("we generally don't"). **Prefer exact, copy-pasteable commands (`uv run pytest tests/unit/ -v`) over vague tool names ("run the tests").** Mark load-bearing rules `IMPORTANT`/`YOU MUST`. Include **negative** rules, not only positive. |
 | **C3 Beyond-inference** | Restating what code already says | Keep only what's NOT derivable from reading code (conventions, "why we rejected X", domain decodes, non-obvious gotchas). Delete restated signatures / directory listings. |
-| **C4 No contradiction** | Conflicting guidance across layers | Cross-check root ↔ scoped ↔ auto-memory; agents pick arbitrarily when rules fight. Flag any rule contradicting verified code/behavior, and any stale survivor of a reversed instruction. |
+| **C4 No contradiction** | Conflicting guidance across layers | Cross-check root ↔ scoped ↔ auto-memory. **Precedence: the more deeply-nested file wins within its subtree; root holds everywhere else** — a scoped rule *refining* root is a valid override, not a defect. Flag true conflicts: two layers disagreeing at the *same* scope, a scoped rule contradicting a meant-to-be-universal root rule, a rule contradicting verified code/behavior, or a stale survivor of a reversed instruction. |
 | **C5 Structure** | Rules buried in prose | Headers + bullets, scannable. Split dense multi-claim paragraphs; one idea per bullet. |
 | **C6 Scope placement** | Rule in the wrong layer | A hold-**everywhere** rule belongs in **root** (scoped files may not load / don't survive `/compact`) — an always-rule living only in a scoped file is a **BLOCKER**. A folder-only rule bloating root is a SHOULD-fix. |
 | **C7 Freshness / no drift** | Stale counts, dates, paths | Verify every count/claim against reality (run the test, grep the source, `ls` the folder). Make relative dates absolute ("as of 2026-06-08", not "recently"). Flag paths/modules that no longer exist. |
@@ -165,8 +165,9 @@ Do NOT apply to short gotchas, axiom one-liners, or anything needed every turn.
 - **Stale vs volatile split.** Stale → fix against live source. Volatile → relocate out of doctrine.
 - **Verify, don't trust the doc about itself.** Every count / path / test-result / claim is checked
   against reality before it's believed.
-- **Scoped files earn their place.** A folder-scoped `CLAUDE.md` exists only to capture a foot-gun
-  invisible from filenames. If you can't state that foot-gun in one sentence, the file shouldn't exist.
+- **Scoped files earn their place.** A folder-scoped `CLAUDE.md` exists to capture a foot-gun
+  invisible from filenames, or to hold a folder-specific section split out of an over-budget root.
+  If you can't state its reason in one sentence, the file shouldn't exist.
 
 ---
 
