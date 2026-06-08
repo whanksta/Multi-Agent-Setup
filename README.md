@@ -22,7 +22,7 @@ It's a tiny, drop-in bundle — click **Use this template** or copy it into any 
 - **Survives cloud sync** — works inside OneDrive / Google Drive / Dropbox; git preserves the symlink (mode `120000`).
 - **Self-healing** — `docreview` detects and repairs a clobbered symlink, backing up any diverging content first.
 - **Doc-quality audit** — the bundled `docreview` skill checks size budgets, scope, drift, broken links, and authoring quality.
-- **Agent-agnostic** — Claude Code, Codex (CLI + desktop), and Antigravity (CLI + desktop) covered today.
+- **Agent-agnostic** — Claude Code (CLI + desktop + web + IDE), Codex (CLI + desktop), and Antigravity (CLI + desktop) covered today.
 
 ## Quick start
 
@@ -51,7 +51,7 @@ Every other agent reads it through `AGENTS.md`.
 
 | Agent | Reads | How |
 |-------|-------|-----|
-| Claude Code (primary) | `CLAUDE.md` | native |
+| Claude Code (CLI + desktop + web + IDE) — primary | `CLAUDE.md` | native |
 | Codex (CLI + desktop) | `AGENTS.md` | symlink → `CLAUDE.md` |
 | Antigravity (CLI + desktop) | `AGENTS.md` | symlink → `CLAUDE.md` |
 
