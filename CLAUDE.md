@@ -12,11 +12,13 @@
 - Run `/docreview` (or `bash scripts/docreview.sh`) to verify/repair this wiring and audit the docs.
 
 ## Scoped CLAUDE.md files
-- Add a `CLAUDE.md` to a folder/subsystem **when it has conventions or foot-guns not obvious from
-  its code**. If you can't name the foot-gun in one sentence, don't create the file.
+- Start with just root `CLAUDE.md`. Add a scoped `CLAUDE.md` to a folder/subsystem **when it grows a
+  convention or foot-gun not obvious from its code, or when root crosses ~200 lines** and a section
+  is folder-specific. If you can't name the reason in one sentence, don't create the file.
 - Scoped files **point to** root doctrine — never restate it. Keep each ≤ 80 non-blank lines.
 - A must-hold-**everywhere** rule belongs in **root** `CLAUDE.md` — scoped files load only when that
   folder is touched and don't survive `/compact`.
+- **On conflict, the more deeply-nested file wins for its subtree; root holds everywhere else.**
 - Run `/docreview` after adding one.
 
 ## Conventions (example — replace with your own)
