@@ -11,6 +11,14 @@
 - **Never write to `AGENTS.md`** — it is a symlink; an atomic-save there clobbers the link. Always edit `CLAUDE.md`.
 - Run `/docreview` (or `bash scripts/docreview.sh`) to verify/repair this wiring and audit the docs.
 
+## Scoped CLAUDE.md files
+- Add a `CLAUDE.md` to a folder/subsystem **when it has conventions or foot-guns not obvious from
+  its code**. If you can't name the foot-gun in one sentence, don't create the file.
+- Scoped files **point to** root doctrine — never restate it. Keep each ≤ 80 non-blank lines.
+- A must-hold-**everywhere** rule belongs in **root** `CLAUDE.md` — scoped files load only when that
+  folder is touched and don't survive `/compact`.
+- Run `/docreview` after adding one.
+
 ## Conventions (example — replace with your own)
 - Secrets via environment variables only — never commit keys.
 - Branch per task; open a PR for review (cross-agent review encouraged).

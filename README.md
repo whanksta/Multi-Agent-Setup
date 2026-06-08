@@ -1,30 +1,53 @@
 # MultiAgentSetup
 
-A drop-in starter kit for repos worked on by **multiple AI coding agents** — Claude Code, Codex
-(CLI + desktop), and Antigravity (CLI + desktop). It keeps **one source of truth** for shared
-rules, **survives cloud sync** (OneDrive / Google Drive / Dropbox), and **self-heals** when an
-agent's atomic-save breaks the wiring. It also ships a `docreview` skill that audits your docs
-against a doc-quality rubric.
+> **One canonical rulebook that every AI coding agent reads.** Keep a single source of truth for
+> your repo's rules across Claude Code, Codex, and Antigravity — and have it survive cloud sync,
+> self-heal when an agent breaks the wiring, and audit its own docs.
 
-Everything here is the deliverable — copy these files into your repo and you're set.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
+[![Use this template](https://img.shields.io/badge/Use%20this%20template-2ea44f?logo=github&logoColor=white)](https://github.com/whanksta/MultiAgentSetup/generate)
+[![works with](https://img.shields.io/badge/works%20with-Claude%20Code,%20Codex,%20Antigravity-blue)](#how-it-works)
 
-## What's in here
+Different AI coding agents read different instruction files — `CLAUDE.md`, `AGENTS.md`, and more.
+Maintain them by hand and they drift; the rules start to disagree and agents pick a side at random.
+**MultiAgentSetup** makes `CLAUDE.md` the one canonical file and wires every other agent's file back
+to it, so you edit shared rules in exactly one place.
 
-```
-CLAUDE.md                              canonical rules — every agent reads this (edit per project)
-AGENTS.md → CLAUDE.md                  symlink: Codex + Antigravity read the rules through it
-.gitignore                             ignores CLAUDE.local.md + clobbered-symlink backups
-scripts/docreview.sh                   verify + auto-repair the wiring (every agent + hooks/CI run this)
-.claude/skills/docreview/
-  SKILL.md                             the /docreview skill (Claude-only): wiring check + doc audit
-  reference/doctrine.md                CLAUDE.md rubric, 9 audit axes, size budgets, fix-classes
-  reference/skill-axes.md              rubric for reviewing SKILL.md files
-```
+It's a tiny, drop-in bundle — click **Use this template** or copy it into any repo and you're set.
 
-## Why it works this way
+## Features
+
+- **Single source of truth** — `CLAUDE.md` holds every shared rule; the other agents read the same bytes.
+- **Zero duplication** — `AGENTS.md` is a symlink, not a copy, so it can never drift out of sync.
+- **Survives cloud sync** — works inside OneDrive / Google Drive / Dropbox; git preserves the symlink (mode `120000`).
+- **Self-healing** — `docreview` detects and repairs a clobbered symlink, backing up any diverging content first.
+- **Doc-quality audit** — the bundled `docreview` skill checks size budgets, scope, drift, broken links, and authoring quality.
+- **Agent-agnostic** — Claude Code, Codex (CLI + desktop), and Antigravity (CLI + desktop) covered today.
+
+## Quick start
+
+### Start a new project
+
+Click **[Use this template](https://github.com/whanksta/MultiAgentSetup/generate)** → you get a
+fresh repo with the wiring already in place and no inherited history. Then edit `CLAUDE.md` with your
+project's rules.
+
+### Add it to an existing repo
+
+Fastest — from inside your repo, paste this to Claude Code (or any coding agent):
+
+> Set up multi-agent instruction files like https://github.com/whanksta/MultiAgentSetup. Make
+> CLAUDE.md the canonical rulebook (fold any existing AGENTS.md / .cursorrules content into it),
+> replace AGENTS.md with a symlink to CLAUDE.md, add scripts/docreview.sh, the
+> `.claude/skills/docreview` skill, and the `.gitignore` entries from that repo, then run
+> `bash scripts/docreview.sh` and confirm it prints PASS.
+
+Prefer to wire it up yourself? See [Manual install](#manual-install).
+
+## How it works
 
 **Claude Code is the primary agent, so `CLAUDE.md` is canonical** — it holds all shared rules.
-Every other agent reads it through `AGENTS.md`; they collaborate, they don't own the rulebook.
+Every other agent reads it through `AGENTS.md`.
 
 | Agent | Reads | How |
 |-------|-------|-----|
@@ -34,47 +57,45 @@ Every other agent reads it through `AGENTS.md`; they collaborate, they don't own
 
 `AGENTS.md` is the cross-tool standard both Codex and Antigravity read, but neither resolves an
 `@import`. So `AGENTS.md` is a **symlink** to `CLAUDE.md` — they read the canonical bytes directly,
-with zero duplication. Claude owns `CLAUDE.md` natively, with Claude-only rules in `.claude/rules/`.
+with zero duplication. Claude owns `CLAUDE.md` natively; Claude-only rules live in `.claude/rules/`.
 
-> **No Gemini?** Google retired Gemini CLI on 2026-06-18, replacing it with Antigravity (a closed-
-> source rewrite) that reads `AGENTS.md`. So Google's agent is covered by the symlink too — a
-> separate `GEMINI.md` is no longer needed.
+> **No Gemini?** Google retired Gemini CLI on 2026-06-18, replacing it with Antigravity (which reads
+> `AGENTS.md`). Google's agent is covered by the symlink — a separate `GEMINI.md` is no longer needed.
 
-### Cloud sync + symlinks (the part people get wrong)
-- OneDrive / Google Drive on macOS **preserve and sync symlinks** (verified) — the "OneDrive
-  mangles symlinks" claim is false.
+### What's in the bundle
+
+```
+CLAUDE.md                  canonical rules — every agent reads this (edit per project)
+AGENTS.md → CLAUDE.md      symlink: Codex + Antigravity read the rules through it
+scripts/docreview.sh       verify + auto-repair the wiring (agents, hooks, and CI all run it)
+.claude/skills/docreview/  the /docreview skill: wiring check + doc-doctrine audit
+  reference/doctrine.md      CLAUDE.md rubric, 9 audit axes, size budgets, fix-classes
+  reference/skill-axes.md    rubric for reviewing SKILL.md files
+.gitignore                 ignores CLAUDE.local.md + clobbered-symlink backups
+```
+
+### Cloud sync & symlinks
+
+- OneDrive / Google Drive on macOS **preserve and sync symlinks** — the "OneDrive mangles symlinks" claim is false.
 - Git stores symlinks portably (mode `120000`), so clones reconstruct them.
-- **Windows:** symlinks need Developer Mode + `git config core.symlinks true`, else `AGENTS.md`
-  checks out as a text file containing "CLAUDE.md". `docreview` repairs it.
+- **Windows:** symlinks need Developer Mode + `git config core.symlinks true`, or `AGENTS.md` checks
+  out as a text file containing "CLAUDE.md". `docreview` repairs it.
 
 ### The one fragility → `docreview`
-An **atomic save** (write-temp-then-rename) replaces the `AGENTS.md` symlink with a regular file,
-and edits to `CLAUDE.md` stop propagating. `scripts/docreview.sh` detects it and re-links —
-backing up any diverging content to `AGENTS.md.clobbered-<ts>` first, so nothing is lost.
 
-`docreview` does two jobs: **(1) wiring** (the script) and **(2) a doc-doctrine audit** — size
-budgets, scope placement, drift, broken links, and CLAUDE.md/SKILL.md authoring quality (see
-`.claude/skills/docreview/reference/`).
+An **atomic save** (write-temp-then-rename) can replace the `AGENTS.md` symlink with a regular file,
+and edits to `CLAUDE.md` stop propagating. `scripts/docreview.sh` detects it and re-links — backing
+up any diverging content to `AGENTS.md.clobbered-<ts>` first, so nothing is lost. It also recreates
+the symlink if `AGENTS.md` goes missing entirely.
 
-**Rule of the road:** never write to `AGENTS.md`; edit `CLAUDE.md`; run `/docreview` (or
-`bash scripts/docreview.sh`) after touching any instruction file.
+`docreview` does two jobs: **(1) wiring** (the script, runnable by every agent and any hook/CI) and
+**(2) a doc-doctrine audit** — size budgets, scope placement, drift, broken links, and
+`CLAUDE.md` / `SKILL.md` authoring quality.
 
-## Adopt it in your repo
+> **Rule of the road:** never write to `AGENTS.md`; edit `CLAUDE.md`; run `/docreview` (or
+> `bash scripts/docreview.sh`) after touching any instruction file.
 
-**New project? Click ["Use this template"](https://github.com/whanksta/MultiAgentSetup/generate)**
-on the repo page — you get a fresh repo with the wiring already in place and no inherited history.
-Then edit `CLAUDE.md` for your project.
-
-**Existing repo — fastest path: hand the URL to your agent.** From inside your repo, paste this to
-Claude Code (or any coding agent):
-
-> Set up multi-agent instruction files like https://github.com/whanksta/MultiAgentSetup. Make
-> CLAUDE.md the canonical rulebook (fold any existing AGENTS.md / .cursorrules content into it),
-> replace AGENTS.md with a symlink to CLAUDE.md, add scripts/docreview.sh, the
-> `.claude/skills/docreview` skill, and the `.gitignore` entries from that repo, then run
-> `bash scripts/docreview.sh` and confirm it prints PASS.
-
-**Option A — copy the files by hand** (then edit `CLAUDE.md` for your project):
+## Manual install
 
 ```bash
 SRC=path/to/MultiAgentSetup; DST=.
@@ -84,22 +105,31 @@ cp "$SRC"/scripts/docreview.sh "$DST"/scripts/
 cp -r "$SRC"/.claude/skills/docreview "$DST"/.claude/skills/
 cat "$SRC"/.gitignore >> "$DST"/.gitignore          # or merge by hand
 ln -snf CLAUDE.md "$DST"/AGENTS.md
-bash "$DST"/scripts/docreview.sh                    # expect: docreview: PASS
+bash "$DST"/scripts/docreview.sh                     # expect: docreview: PASS
 ```
 
-**Option B — paste the full [Bootstrap Prompt](#bootstrap-prompt)** below into Claude Code from
-inside your repo and let it build the wiring (useful when the agent can't see this repo's files).
+For an agent that can't see this repo's files, paste the full [Bootstrap Prompt](#bootstrap-prompt) instead.
 
-## Survives wipes
+## FAQ
 
-Keep this bundle in a **git repo** (cloud + a public/private GitHub remote). User-profile config
-(`~/.claude/`) is **not** backed up or migrated and is exactly what a machine wipe erases — so the
-durable, migratable unit is always the repo, never user-scope. To carry the setup forward, copy
-from this repo into the new one (Option A) or paste the Bootstrap Prompt (Option B).
+**Why a symlink instead of copying the rules into `AGENTS.md`?**
+A copy drifts the moment either file is edited. A symlink makes `AGENTS.md` *be* `CLAUDE.md` — one
+set of bytes, no sync step, nothing to forget.
+
+**Does this survive a machine wipe?**
+Keep the repo on a GitHub remote. User-profile config (`~/.claude/`) is *not* migrated by a wipe —
+the durable unit is always the repo. Carry the setup forward by templating/cloning it or pasting the
+Bootstrap Prompt into the new repo.
+
+**What about rules for a single subfolder?**
+Add a `CLAUDE.md` to that folder *only* when it has a foot-gun not obvious from its code — point to
+the root, don't restate it. `docreview` audits scoped files for exactly this (and flags ones that
+don't earn their place).
 
 ## Bootstrap Prompt
 
-> Paste into Claude Code **from inside the target repo**.
+<details>
+<summary>Paste into an agent from inside the target repo (for when it can't see this repo's files).</summary>
 
 ```
 Set up this repo for multi-agent instruction files, with Claude Code as the primary agent and
@@ -108,8 +138,9 @@ CLAUDE.md as the single canonical rulebook the other agents point at. Do all of 
 1. CLAUDE.md (REAL, canonical): keep it if present; else create it with a short project
    description + a "Canonical instructions file" section stating CLAUDE.md is canonical (edited
    here), AGENTS.md is a symlink to it, .claude/rules/ is Claude-only, never write to AGENTS.md,
-   run /docreview after edits. If shared rules currently live in AGENTS.md / .cursorrules /
-   elsewhere, consolidate them into CLAUDE.md first.
+   run /docreview after edits — plus a "Scoped CLAUDE.md files" rule: add a folder-level CLAUDE.md
+   only when that folder has a foot-gun not obvious from its code, point to root, keep it <=80 lines.
+   If shared rules currently live in AGENTS.md / .cursorrules / elsewhere, consolidate into CLAUDE.md first.
 2. AGENTS.md: delete any existing file, then  ln -snf CLAUDE.md AGENTS.md
 3. scripts/docreview.sh: create the verify/auto-repair script that enforces this topology
    (CLAUDE.md real canonical; AGENTS.md symlink→CLAUDE.md, creating it if missing and re-linking +
@@ -129,6 +160,8 @@ docreview repairs that. OneDrive/Google Drive on macOS preserve symlinks; git st
 120000; Windows needs Developer Mode + core.symlinks=true.
 ```
 
+</details>
+
 ## License
 
-MIT — do whatever; no warranty.
+[MIT](LICENSE) — do whatever; no warranty.
