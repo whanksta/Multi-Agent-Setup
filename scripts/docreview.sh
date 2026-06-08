@@ -3,7 +3,7 @@
 #
 # Topology this enforces:
 #   CLAUDE.md  = real canonical file (all shared rules)
-#   AGENTS.md  = symlink -> CLAUDE.md   (Codex CLI + Antigravity read rules through it)
+#   AGENTS.md  = symlink -> CLAUDE.md   (Codex + Antigravity read rules through it)
 #   .claude/rules/ = Claude-only rules
 #
 # Safe to run anytime. Auto-fixes the AGENTS.md symlink; never silently discards
