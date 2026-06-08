@@ -3,8 +3,7 @@
 #
 # Topology this enforces:
 #   CLAUDE.md  = real canonical file (all shared rules)
-#   AGENTS.md  = symlink -> CLAUDE.md   (Codex + Antigravity read rules through it)
-#   GEMINI.md  = real file importing @./CLAUDE.md + Gemini-specific notes
+#   AGENTS.md  = symlink -> CLAUDE.md   (Codex CLI + Antigravity read rules through it)
 #   .claude/rules/ = Claude-only rules
 #
 # Safe to run anytime. Auto-fixes the AGENTS.md symlink; never silently discards
@@ -58,22 +57,7 @@ else
   relink_agents; status=1
 fi
 
-# 3. GEMINI.md must be a real file importing @./CLAUDE.md.
-if [[ ! -e GEMINI.md ]]; then
-  printf '@./CLAUDE.md\n\n## Gemini / Antigravity specifics\n- Add Gemini-specific edge commands here. Shared rules live in CLAUDE.md (imported above).\n' > GEMINI.md
-  echo "  FIX   created GEMINI.md importing @./CLAUDE.md."
-  status=1
-elif [[ -L GEMINI.md ]]; then
-  echo "  WARN  GEMINI.md is a symlink but should be a real file importing @./CLAUDE.md (so it can hold Gemini edges)."
-  status=1
-elif ! grep -q '^@\./CLAUDE\.md' GEMINI.md; then
-  echo "  WARN  GEMINI.md exists but does not import @./CLAUDE.md — add '@./CLAUDE.md' at the top."
-  status=1
-else
-  echo "  ok    GEMINI.md imports @./CLAUDE.md"
-fi
-
-# 4. Canonical must not import the symlink (would be circular).
+# 3. Canonical must not import the symlink (would be circular).
 if grep -q '^@\./AGENTS\.md' CLAUDE.md 2>/dev/null; then
   echo "  WARN  CLAUDE.md imports @./AGENTS.md — circular (AGENTS.md is a symlink to CLAUDE.md). Remove that line."
   status=1

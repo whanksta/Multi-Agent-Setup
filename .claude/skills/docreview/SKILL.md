@@ -1,6 +1,6 @@
 ---
 name: docreview
-description: Verify and repair the multi-agent instruction-file wiring (CLAUDE.md canonical, AGENTS.md symlink → CLAUDE.md, GEMINI.md imports CLAUDE.md) AND audit the documentation surface against doc doctrine — size budgets, scope placement, staleness/drift, broken links, doctrine-vs-reality, and CLAUDE.md / SKILL.md authoring quality. Use to check or fix AGENTS.md/CLAUDE.md/GEMINI.md consistency, after any agent may have edited an instruction file, when the AGENTS.md symlink may have been clobbered, when a CLAUDE.md is bloated/stale/duplicative, or before committing changes to instruction files or skills. Triggers - /docreview, "check doc wiring", "audit docs", "review CLAUDE.md", "doc drift", "is this skill well written".
+description: Verify and repair the multi-agent instruction-file wiring (CLAUDE.md canonical, AGENTS.md symlink → CLAUDE.md) AND audit the documentation surface against doc doctrine — size budgets, scope placement, staleness/drift, broken links, doctrine-vs-reality, and CLAUDE.md / SKILL.md authoring quality. Use to check or fix AGENTS.md/CLAUDE.md consistency, after any agent may have edited an instruction file, when the AGENTS.md symlink may have been clobbered, when a CLAUDE.md is bloated/stale/duplicative, or before committing changes to instruction files or skills. Triggers - /docreview, "check doc wiring", "audit docs", "review CLAUDE.md", "doc drift", "is this skill well written".
 ---
 
 # docreview
@@ -9,7 +9,7 @@ Two jobs, run in order. **Part 1 (wiring)** is mechanical and always runs. **Par
 is a judgment audit — run it on request, before committing instruction-file changes, or whenever
 a doc looks bloated/stale.
 
-Scope by default: this repo's instruction surface — `CLAUDE.md`, `GEMINI.md`, `.claude/rules/*`,
+Scope by default: this repo's instruction surface — `CLAUDE.md`, `.claude/rules/*`,
 anything under `docs/`, and any scoped `*/CLAUDE.md`. **Never audit `AGENTS.md` as its own file —
 it's a symlink to `CLAUDE.md`.** A scope arg (a path, a glob, or "just the wiring") narrows the run.
 
@@ -22,8 +22,7 @@ it's a symlink to `CLAUDE.md`.** A scope arg (a path, a glob, or "just the wirin
    bash scripts/docreview.sh
    ```
    It verifies + auto-repairs: `CLAUDE.md` is the real canonical file; `AGENTS.md` is a symlink →
-   `CLAUDE.md` (re-links if missing/wrong); `GEMINI.md` is a real file importing `@./CLAUDE.md`;
-   no circular `@./AGENTS.md` in `CLAUDE.md`.
+   `CLAUDE.md` (re-links if missing/wrong); no circular `@./AGENTS.md` in `CLAUDE.md`.
 2. Report which files were `ok`, `FIX`ed, or `WARN`ed.
 3. If it saved an `AGENTS.md.clobbered-*` backup (an agent wrote diverging rules into the symlink),
    open that backup, summarize what differs from `CLAUDE.md`, and **ask** before folding changes in.
@@ -31,7 +30,7 @@ it's a symlink to `CLAUDE.md`.** A scope arg (a path, a glob, or "just the wirin
 4. After any repair, re-run the script and confirm `docreview: PASS`.
 
 > The script lives at **`scripts/docreview.sh`, not inside this skill, on purpose**: the wiring is a
-> *cross-agent* concern — Codex, Gemini, Antigravity, and any pre-commit hook / CI all run
+> *cross-agent* concern — Codex, Antigravity, and any pre-commit hook / CI all run
 > `bash scripts/docreview.sh`. Burying it under `.claude/` would make shared infrastructure
 > Claude-private. The skill is just Claude's convenience entry point to it.
 
@@ -51,7 +50,7 @@ Procedure:
 1. **Inventory.** List in-scope files with non-blank line counts vs budget. Print it first — a
    silent scope expansion is the most common failure mode.
    ```bash
-   for f in CLAUDE.md GEMINI.md .claude/rules/*.md; do printf "%-32s %s\n" "$f" "$(grep -cE '[^[:space:]]' "$f" 2>/dev/null)"; done
+   for f in CLAUDE.md .claude/rules/*.md; do printf "%-32s %s\n" "$f" "$(grep -cE '[^[:space:]]' "$f" 2>/dev/null)"; done
    ```
    Verdict each always-loaded file PASS / WITHIN-SLACK (<1.5×) / OVER (≥1.5×). Budgets: root
    `CLAUDE.md` ≤ 200, scoped ≤ 80 non-blank lines.
@@ -81,7 +80,7 @@ Procedure:
 | Sev | Axis | File:line | Catch | Fix (class) |
 |-----|------|-----------|-------|-------------|
 | BLOCKER | C9 | CLAUDE.md:21 | API token in plain text | move to env var [one-line-tweak] |
-| SHOULD  | 2  | GEMINI.md:12 | restates a shared rule | collapse to the import [trim] |
+| SHOULD  | 2  | docs/api.md:8 | restates a root CLAUDE.md rule | collapse to a pointer [trim] |
 
 Verdict: N blockers, M should-fix, K nits — + the single highest-leverage change.
 ```
@@ -101,10 +100,8 @@ to a single agent so the audit stays reproducible.
 
 - **`AGENTS.md` is the symlink — audit `CLAUDE.md`, not it.** Part 1 checks the link; Part 2 reads
   through it.
-- **`GEMINI.md` must hold edges only.** It imports the shared rules — restating them is an OR5
-  violation, not helpfulness.
-- **CLAUDE.md's size budget pays off 4×.** It's the always-loaded file for all four agents via the
-  symlink + import, so a trim there is a trim for everyone.
+- **CLAUDE.md's size budget pays off 3×.** It's the always-loaded file for all three agents — Claude
+  natively, Codex and Antigravity via the symlink — so a trim there is a trim for everyone.
 - **Verify, don't trust the doc about itself.** "N/N passing", a path that "exists", "X is wired" —
   each is a claim to check, not a fact.
 - **Descriptive vs aspirational (axis 8).** If the doc describes reality and reality disagrees, fix

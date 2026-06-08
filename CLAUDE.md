@@ -6,8 +6,7 @@
 
 ## Canonical instructions file
 - **`CLAUDE.md` is canonical — edit shared rules HERE.** Claude Code is the primary agent.
-- `AGENTS.md` is a **symlink → `CLAUDE.md`** (Codex and Antigravity read the rules through it).
-- `GEMINI.md` is a real file that imports `@./CLAUDE.md`, plus Gemini-specific notes below it.
+- `AGENTS.md` is a **symlink → `CLAUDE.md`** — Codex CLI and Antigravity read the rules through it.
 - Claude-only rules live in `.claude/rules/`.
 - **Never write to `AGENTS.md`** — it is a symlink; an atomic-save there clobbers the link. Always edit `CLAUDE.md`.
 - Run `/docreview` (or `bash scripts/docreview.sh`) to verify/repair this wiring and audit the docs.
