@@ -34,13 +34,16 @@ project's rules.
 
 ### Add it to an existing repo
 
-Fastest — from inside your repo, paste this to Claude Code (or any coding agent):
+This **adds** the wiring to your repo — it keeps your existing rules and conventions, it does **not**
+replace them. From inside your repo, paste this to Claude Code (or any coding agent):
 
-> Set up multi-agent instruction files like https://github.com/whanksta/MultiAgentSetup. Make
-> CLAUDE.md the canonical rulebook (fold any existing AGENTS.md / .cursorrules content into it),
-> replace AGENTS.md with a symlink to CLAUDE.md, add scripts/docreview.sh, the
-> `.claude/skills/docreview` skill, and the `.gitignore` entries from that repo, then run
-> `bash scripts/docreview.sh` and confirm it prints PASS.
+> Incorporate the multi-agent instruction-file wiring from
+> https://github.com/whanksta/MultiAgentSetup into THIS repo — **add it, don't replace anything I
+> already have.** Make CLAUDE.md the canonical rulebook, first folding any rules currently in
+> AGENTS.md / .cursorrules / other instruction files into it; then replace the AGENTS.md *file* with
+> a symlink to CLAUDE.md; add scripts/docreview.sh, the `.claude/skills/docreview` skill, and the
+> `.gitignore` entries from that repo. Keep all my project's conventions — do not overwrite them with
+> the template's example rules. Finally run `bash scripts/docreview.sh` and confirm it prints PASS.
 
 Prefer to wire it up yourself? See [Manual install](#manual-install).
 
@@ -135,7 +138,8 @@ don't earn their place).
 Set up this repo for multi-agent instruction files, with Claude Code as the primary agent and
 CLAUDE.md as the single canonical rulebook the other agents point at. Do all of the following:
 
-1. CLAUDE.md (REAL, canonical): keep it if present; else create it with a short project
+1. CLAUDE.md (REAL, canonical): keep it if present — preserve all existing rules and add the wiring
+   around them, never overwrite the project's own conventions; else create it with a short project
    description + a "Canonical instructions file" section stating CLAUDE.md is canonical (edited
    here), AGENTS.md is a symlink to it, .claude/rules/ is Claude-only, never write to AGENTS.md,
    run /docreview after edits — plus a "Scoped CLAUDE.md files" rule: add a folder-level CLAUDE.md
