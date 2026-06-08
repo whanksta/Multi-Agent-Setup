@@ -61,7 +61,20 @@ budgets, scope placement, drift, broken links, and CLAUDE.md/SKILL.md authoring 
 
 ## Adopt it in your repo
 
-**Option A — copy the files** (then edit `CLAUDE.md` for your project):
+**New project? Click ["Use this template"](https://github.com/whanksta/MultiAgentSetup/generate)**
+on the repo page — you get a fresh repo with the wiring already in place and no inherited history.
+Then edit `CLAUDE.md` for your project.
+
+**Existing repo — fastest path: hand the URL to your agent.** From inside your repo, paste this to
+Claude Code (or any coding agent):
+
+> Set up multi-agent instruction files like https://github.com/whanksta/MultiAgentSetup. Make
+> CLAUDE.md the canonical rulebook (fold any existing AGENTS.md / .cursorrules content into it),
+> replace AGENTS.md with a symlink to CLAUDE.md, add scripts/docreview.sh, the
+> `.claude/skills/docreview` skill, and the `.gitignore` entries from that repo, then run
+> `bash scripts/docreview.sh` and confirm it prints PASS.
+
+**Option A — copy the files by hand** (then edit `CLAUDE.md` for your project):
 
 ```bash
 SRC=path/to/MultiAgentSetup; DST=.
@@ -74,8 +87,8 @@ ln -snf CLAUDE.md "$DST"/AGENTS.md
 bash "$DST"/scripts/docreview.sh                    # expect: docreview: PASS
 ```
 
-**Option B — paste the Bootstrap Prompt** below into Claude Code from inside your repo and let it
-build the wiring (useful when the agent can't see this repo's files).
+**Option B — paste the full [Bootstrap Prompt](#bootstrap-prompt)** below into Claude Code from
+inside your repo and let it build the wiring (useful when the agent can't see this repo's files).
 
 ## Survives wipes
 
