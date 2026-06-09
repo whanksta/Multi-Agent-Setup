@@ -35,7 +35,7 @@ needs a single source of truth — which is what this kit enforces.
 
 - **Single source of truth** — `CLAUDE.md` holds every shared rule; the other agents read the same bytes.
 - **Zero duplication** — `AGENTS.md` is a symlink, not a copy, so it can never drift out of sync.
-- **Skills shared too** — Claude's `.claude/skills/` is folder-symlinked into Codex's & Antigravity's skill dir, so a skill authored once auto-replicates to every agent.
+- **Skills shared too** — Claude's `.claude/skills/` is folder-symlinked into the `.agents/skills` dir Codex & Antigravity read, so a skill authored once auto-replicates to every agent.
 - **Survives cloud sync** — works inside OneDrive / Google Drive / Dropbox; git preserves the symlink (mode `120000`).
 - **Self-healing** — `docreview` detects and repairs a clobbered symlink, backing up any diverging content first.
 - **Doc-quality audit** — the bundled `docreview` skill checks size budgets, scope, drift, broken links, and authoring quality.
@@ -108,15 +108,15 @@ scripts/docreview.sh       verify + auto-repair the wiring (agents, hooks, and C
 
 - OneDrive / Google Drive on macOS **preserve and sync symlinks** — the "OneDrive mangles symlinks" claim is false.
 - Git stores symlinks portably (mode `120000`), so clones reconstruct them.
-- **Windows:** symlinks need Developer Mode + `git config core.symlinks true`, or `AGENTS.md` checks
-  out as a text file containing "CLAUDE.md". `docreview` repairs it.
+- **Windows:** symlinks need Developer Mode + `git config core.symlinks true`, or `AGENTS.md` **and**
+  `.agents/skills` check out as plain files containing their target path. `docreview` repairs both.
 
 ### The one fragility → `docreview`
 
-An **atomic save** (write-temp-then-rename) can replace the `AGENTS.md` symlink with a regular file,
-and edits to `CLAUDE.md` stop propagating. `scripts/docreview.sh` detects it and re-links — backing
-up any diverging content to `AGENTS.md.clobbered-<ts>` first, so nothing is lost. It also recreates
-the symlink if `AGENTS.md` goes missing entirely.
+An **atomic save** (write-temp-then-rename) can turn either symlink — `AGENTS.md` or `.agents/skills`
+— into a regular file, and edits to `CLAUDE.md` (or a skill) stop propagating. `scripts/docreview.sh`
+detects either case and re-links — backing up any diverging content to a `*.clobbered-<ts>` copy
+first, so nothing is lost. It also recreates a symlink that has gone missing entirely.
 
 `docreview` does two jobs: **(1) wiring** (the script, runnable by every agent and any hook/CI) and
 **(2) a doc-doctrine audit** — size budgets, scope placement, drift, broken links, and

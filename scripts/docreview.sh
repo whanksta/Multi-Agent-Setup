@@ -101,8 +101,10 @@ if [[ -d "$SKILL_CANON" && ! -L "$SKILL_CANON" ]]; then
       if [[ -n "$real_skill" ]]; then
         backup="$mirror.clobbered-$ts"; cp -R "$mirror" "$backup"
         echo "  WARN  $mirror held real skill copies — backed up to $backup before replacing with symlink."; status=1
-      else
+      elif [[ -d "$mirror" ]]; then
         echo "  WARN  $mirror was a dir of symlinks/empty — replacing with a single folder symlink."; status=1
+      else
+        echo "  WARN  $mirror was a regular file (dereferenced symlink) — replacing with a folder symlink."; status=1
       fi
       rm -rf "$mirror"; mkdir -p "$parent"; ln -snf "$want" "$mirror"
     else
