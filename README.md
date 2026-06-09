@@ -48,7 +48,7 @@ needs a single source of truth — which is what this kit enforces.
 The clean case — nothing to consolidate. Click
 **[Use this template](https://github.com/whanksta/MultiAgentSetup/generate)** → you get a fresh repo
 with the wiring already in place and no inherited history. Then edit `CLAUDE.md` with your project's
-rules and run `bash scripts/docreview.sh` to confirm `PASS`.
+rules and run `python3 scripts/docreview.py` to confirm `PASS`.
 
 ### Add it to an existing repo
 
@@ -59,13 +59,14 @@ and keep *your* rules (never the template's examples). Paste this to any agent f
 
 > Incorporate the multi-agent instruction-file wiring from
 > https://github.com/whanksta/MultiAgentSetup into THIS repo — **add it, don't replace anything I
-> already have.** First **consolidate**: find every instruction file (AGENTS.md, .cursorrules,
-> scattered rule docs) and fold their real rules into a single canonical **CLAUDE.md**, de-duplicating
-> and dropping anything stale — keep all my project's conventions, never swap them for the template's
-> examples. Then **wire to one source of truth**: replace the AGENTS.md *file* with a symlink to
+> already have.** First **pre-consolidate**: read all existing instruction files (like AGENTS.md, .cursorrules,
+> and scattered rule docs), extract and fold all their active rules into a single canonical **CLAUDE.md**
+> (de-duplicating and keeping all my project's conventions, never swapping them for the template's examples).
+> Doing this first ensures no rules are lost before files are replaced with symlinks.
+> Then **wire to one source of truth**: delete the old AGENTS.md file and replace it with a symlink to
 > CLAUDE.md; keep my canonical skills in .claude/skills/ and let docreview folder-symlink .agents/skills
-> (read by Codex and Antigravity) to it — **symlink, never copy**; add scripts/docreview.sh and the
-> .gitignore entries. Finally run `bash scripts/docreview.sh` and confirm it prints `PASS`.
+> (read by Codex and Antigravity) to it — **symlink, never copy**; add scripts/docreview.py and the
+> .gitignore entries. Finally run `python3 scripts/docreview.py` and confirm it prints `PASS`.
 
 Prefer to wire it up yourself? See [Manual install](#manual-install).
 
@@ -96,7 +97,7 @@ auto-replicates to every agent, no copy step. `docreview` maintains the link lik
 ```
 CLAUDE.md                  canonical rules — every agent reads this (edit per project)
 AGENTS.md → CLAUDE.md      symlink: Codex + Antigravity read the rules through it
-scripts/docreview.sh       verify + auto-repair the wiring (agents, hooks, and CI all run it)
+scripts/docreview.py       verify + auto-repair the wiring (agents, hooks, and CI all run it)
 .claude/skills/docreview/  the /docreview skill: wiring check + doc-doctrine audit (canonical)
   reference/doctrine.md      CLAUDE.md rubric, 9 audit axes, size budgets, fix-classes
   reference/skill-axes.md    rubric for reviewing SKILL.md files
@@ -114,7 +115,7 @@ scripts/docreview.sh       verify + auto-repair the wiring (agents, hooks, and C
 ### The one fragility → `docreview`
 
 An **atomic save** (write-temp-then-rename) can turn either symlink — `AGENTS.md` or `.agents/skills`
-— into a regular file, and edits to `CLAUDE.md` (or a skill) stop propagating. `scripts/docreview.sh`
+— into a regular file, and edits to `CLAUDE.md` (or a skill) stop propagating. `scripts/docreview.py`
 detects either case and re-links — backing up any diverging content to a `*.clobbered-<ts>` copy
 first, so nothing is lost. It also recreates a symlink that has gone missing entirely.
 
@@ -123,7 +124,7 @@ first, so nothing is lost. It also recreates a symlink that has gone missing ent
 `CLAUDE.md` / `SKILL.md` authoring quality.
 
 > **Rule of the road:** never write to `AGENTS.md`; edit `CLAUDE.md`; run `/docreview` (or
-> `bash scripts/docreview.sh`) after touching any instruction file.
+> `python3 scripts/docreview.py`) after touching any instruction file.
 
 ## Manual install
 
@@ -131,11 +132,11 @@ first, so nothing is lost. It also recreates a symlink that has gone missing ent
 SRC=path/to/MultiAgentSetup; DST=.
 mkdir -p "$DST"/{scripts,.claude/skills}
 cp "$SRC"/CLAUDE.md "$DST"/                          # then replace CLAUDE.md's rules with yours
-cp "$SRC"/scripts/docreview.sh "$DST"/scripts/
+cp "$SRC"/scripts/docreview.py "$DST"/scripts/
 cp -r "$SRC"/.claude/skills/docreview "$DST"/.claude/skills/   # canonical skill
 cat "$SRC"/.gitignore >> "$DST"/.gitignore          # or merge by hand
 ln -snf CLAUDE.md "$DST"/AGENTS.md                   # rules symlink
-bash "$DST"/scripts/docreview.sh                     # mints skill mirrors (.agents/skills…); expect: docreview: PASS
+python3 "$DST"/scripts/docreview.py                  # mints skill mirrors (.agents/skills…); expect: docreview: PASS
 ```
 
 For an agent that can't see this repo's files, paste the full [Bootstrap Prompt](#bootstrap-prompt) instead.
@@ -171,22 +172,23 @@ CLAUDE.md as the single canonical rulebook the other agents point at. Do all of 
    here), AGENTS.md is a symlink to it, .claude/rules/ is Claude-only, never write to AGENTS.md,
    run /docreview after edits — plus a "Scoped CLAUDE.md files" rule: add a folder-level CLAUDE.md
    only when that folder has a foot-gun not obvious from its code, point to root, keep it <=80 lines.
-   If shared rules are scattered across AGENTS.md / .cursorrules / GEMINI.md / other docs, find them
-   all, consolidate the real ones into CLAUDE.md (de-dupe, drop stale), and remove the now-redundant
-   copies — one source of truth.
-2. AGENTS.md: delete any existing file, then  ln -snf CLAUDE.md AGENTS.md
-3. scripts/docreview.sh: create the verify/auto-repair script that enforces this topology
+   **Pre-consolidate first:** Read all existing instruction files (including AGENTS.md, .cursorrules,
+   GEMINI.md, etc.) and fold all active rules into CLAUDE.md. Doing this first ensures no rules are
+   lost. Once consolidated, remove the redundant copies so only CLAUDE.md remains as the single source of truth.
+2. AGENTS.md: delete any existing file, then create a relative symlink pointing to CLAUDE.md (so the
+   script will just see a compliant setup and maintain it).
+3. scripts/docreview.py: create the verify/auto-repair script that enforces this topology
    (CLAUDE.md real canonical; AGENTS.md symlink→CLAUDE.md, creating it if missing and re-linking +
    backing up a clobbered diverging AGENTS.md to AGENTS.md.clobbered-<ts>; no circular @./AGENTS.md
    in CLAUDE.md; and the skills mirror .agents/skills (read by Codex + Antigravity) as a folder
    symlink to .claude/skills, re-linking if missing/wrong and backing up real copies). chmod +x it.
-4. .claude/skills/docreview/SKILL.md: a canonical "docreview" skill that runs bash
-   scripts/docreview.sh, reports the result, handles AGENTS.md.clobbered-* backups (summarize the
+4. .claude/skills/docreview/SKILL.md: a canonical "docreview" skill that runs python3
+   scripts/docreview.py, reports the result, handles AGENTS.md.clobbered-* backups (summarize the
    diff, ask before folding in), and re-runs to confirm PASS. Do NOT copy the skill into other agents'
-   dirs — docreview.sh folder-symlinks .agents/skills -> .claude/skills so Codex and Antigravity
+   dirs — docreview.py folder-symlinks .agents/skills -> .claude/skills so Codex and Antigravity
    read the same canonical skill.
 5. .gitignore: add CLAUDE.local.md and AGENTS.md.clobbered-* (also covers skill-mirror backups).
-6. Run bash scripts/docreview.sh, confirm "docreview: PASS", then summarize and remind me to edit
+6. Run python3 scripts/docreview.py, confirm "docreview: PASS", then summarize and remind me to edit
    shared rules and skills only in their canonical home (CLAUDE.md / .claude/skills/).
 
 Context: Codex (CLI + desktop) + Antigravity (CLI + desktop) read AGENTS.md but can't auto-@import,
