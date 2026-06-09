@@ -22,7 +22,8 @@ it's a symlink to `CLAUDE.md`.** A scope arg (a path, a glob, or "just the wirin
    bash scripts/docreview.sh
    ```
    It verifies + auto-repairs: `CLAUDE.md` is the real canonical file; `AGENTS.md` is a symlink →
-   `CLAUDE.md` (re-links if missing/wrong); no circular `@./AGENTS.md` in `CLAUDE.md`.
+   `CLAUDE.md` (re-links if missing/wrong); the skills mirror `.agents/skills` (Codex + Antigravity)
+   is a folder symlink → `.claude/skills`; no circular `@./AGENTS.md` in `CLAUDE.md`.
 2. Report which files were `ok`, `FIX`ed, or `WARN`ed.
 3. If it saved an `AGENTS.md.clobbered-*` backup (an agent wrote diverging rules into the symlink),
    open that backup, summarize what differs from `CLAUDE.md`, and **ask** before folding changes in.
@@ -32,7 +33,8 @@ it's a symlink to `CLAUDE.md`.** A scope arg (a path, a glob, or "just the wirin
 > The script lives at **`scripts/docreview.sh`, not inside this skill, on purpose**: the wiring is a
 > *cross-agent* concern — Codex, Antigravity, and any pre-commit hook / CI all run
 > `bash scripts/docreview.sh`. Burying it under `.claude/` would make shared infrastructure
-> Claude-private. The skill is just Claude's convenience entry point to it.
+> Claude-private. The skill is just a convenience entry point to it for whichever agent you're in
+> (Claude natively; Codex & Antigravity through the `.agents/skills` symlink).
 
 If the user only asked to "check the wiring," stop here.
 

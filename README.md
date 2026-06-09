@@ -15,10 +15,27 @@ to it, so you edit shared rules in exactly one place.
 
 It's a tiny, drop-in bundle — click **Use this template** or copy it into any repo and you're set.
 
+## Why run all three?
+
+The agents aren't interchangeable — each trades speed against quality differently, and that's the
+whole point:
+
+- **Claude Code** — the strongest reasoning of the three, but the slowest. Reach for it on the hard,
+  ambiguous, high-stakes work.
+- **Codex** — almost as capable, and much faster. The everyday workhorse for fast, high-quality iteration.
+- **Antigravity** — blazing fast, lighter on judgment. Great for quick, well-scoped changes and
+  high-volume grunt work.
+
+Point all three at **one shared rulebook** and they complement instead of compete: hand each task to
+whichever fits the speed/quality tradeoff of the moment, and because every agent reads the same
+`CLAUDE.md` and the same skills, the output stays consistent no matter who did it. That symbiosis
+needs a single source of truth — which is what this kit enforces.
+
 ## Features
 
 - **Single source of truth** — `CLAUDE.md` holds every shared rule; the other agents read the same bytes.
 - **Zero duplication** — `AGENTS.md` is a symlink, not a copy, so it can never drift out of sync.
+- **Skills shared too** — Claude's `.claude/skills/` is folder-symlinked into Codex's & Antigravity's skill dir, so a skill authored once auto-replicates to every agent.
 - **Survives cloud sync** — works inside OneDrive / Google Drive / Dropbox; git preserves the symlink (mode `120000`).
 - **Self-healing** — `docreview` detects and repairs a clobbered symlink, backing up any diverging content first.
 - **Doc-quality audit** — the bundled `docreview` skill checks size budgets, scope, drift, broken links, and authoring quality.
@@ -28,22 +45,27 @@ It's a tiny, drop-in bundle — click **Use this template** or copy it into any 
 
 ### Start a new project
 
-Click **[Use this template](https://github.com/whanksta/MultiAgentSetup/generate)** → you get a
-fresh repo with the wiring already in place and no inherited history. Then edit `CLAUDE.md` with your
-project's rules.
+The clean case — nothing to consolidate. Click
+**[Use this template](https://github.com/whanksta/MultiAgentSetup/generate)** → you get a fresh repo
+with the wiring already in place and no inherited history. Then edit `CLAUDE.md` with your project's
+rules and run `bash scripts/docreview.sh` to confirm `PASS`.
 
 ### Add it to an existing repo
 
-This **adds** the wiring to your repo — it keeps your existing rules and conventions, it does **not**
-replace them. From inside your repo, paste this to Claude Code (or any coding agent):
+More work than a new project: existing repos have usually **sprawled** — rules scattered across
+`AGENTS.md`, `.cursorrules`, a stray `GEMINI.md`, loose notes, often disagreeing. So this is a
+**clean + consolidate** pass: collapse them into one canonical `CLAUDE.md`, wire every agent to it,
+and keep *your* rules (never the template's examples). Paste this to any agent from inside your repo:
 
 > Incorporate the multi-agent instruction-file wiring from
 > https://github.com/whanksta/MultiAgentSetup into THIS repo — **add it, don't replace anything I
-> already have.** Make CLAUDE.md the canonical rulebook, first folding any rules currently in
-> AGENTS.md / .cursorrules / other instruction files into it; then replace the AGENTS.md *file* with
-> a symlink to CLAUDE.md; add scripts/docreview.sh, the `.claude/skills/docreview` skill, and the
-> `.gitignore` entries from that repo. Keep all my project's conventions — do not overwrite them with
-> the template's example rules. Finally run `bash scripts/docreview.sh` and confirm it prints PASS.
+> already have.** First **consolidate**: find every instruction file (AGENTS.md, .cursorrules,
+> scattered rule docs) and fold their real rules into a single canonical **CLAUDE.md**, de-duplicating
+> and dropping anything stale — keep all my project's conventions, never swap them for the template's
+> examples. Then **wire to one source of truth**: replace the AGENTS.md *file* with a symlink to
+> CLAUDE.md; keep my canonical skills in .claude/skills/ and let docreview folder-symlink .agents/skills
+> (read by Codex and Antigravity) to it — **symlink, never copy**; add scripts/docreview.sh and the
+> .gitignore entries. Finally run `bash scripts/docreview.sh` and confirm it prints `PASS`.
 
 Prefer to wire it up yourself? See [Manual install](#manual-install).
 
@@ -52,15 +74,19 @@ Prefer to wire it up yourself? See [Manual install](#manual-install).
 **Claude Code is the primary agent, so `CLAUDE.md` is canonical** — it holds all shared rules.
 Every other agent reads it through `AGENTS.md`.
 
-| Agent | Reads | How |
-|-------|-------|-----|
-| Claude Code (CLI + desktop + web + IDE) — primary | `CLAUDE.md` | native |
-| Codex (CLI + desktop) | `AGENTS.md` | symlink → `CLAUDE.md` |
-| Antigravity (CLI + desktop) | `AGENTS.md` | symlink → `CLAUDE.md` |
+| Agent | Rules | Skills |
+|-------|-------|--------|
+| Claude Code (CLI + desktop + web + IDE) — primary | `CLAUDE.md` (native) | `.claude/skills/` (native, canonical) |
+| Codex (CLI + desktop) | `AGENTS.md` → `CLAUDE.md` | `.agents/skills/` → `.claude/skills/` |
+| Antigravity (CLI + desktop) | `AGENTS.md` → `CLAUDE.md` | `.agents/skills/` → `.claude/skills/` |
 
 `AGENTS.md` is the cross-tool standard both Codex and Antigravity read, but neither resolves an
 `@import`. So `AGENTS.md` is a **symlink** to `CLAUDE.md` — they read the canonical bytes directly,
 with zero duplication. Claude owns `CLAUDE.md` natively; Claude-only rules live in `.claude/rules/`.
+
+**Skills ride the same rails.** Claude's skills live in `.claude/skills/` (canonical); Codex and
+Antigravity read them from `.agents/skills/`, a **folder symlink** to it — author a skill once and it
+auto-replicates to every agent, no copy step. `docreview` maintains the link like it does `AGENTS.md`.
 
 > **No Gemini?** Google retired Gemini CLI on 2026-06-18, replacing it with Antigravity (which reads
 > `AGENTS.md`). Google's agent is covered by the symlink — a separate `GEMINI.md` is no longer needed.
@@ -71,10 +97,11 @@ with zero duplication. Claude owns `CLAUDE.md` natively; Claude-only rules live 
 CLAUDE.md                  canonical rules — every agent reads this (edit per project)
 AGENTS.md → CLAUDE.md      symlink: Codex + Antigravity read the rules through it
 scripts/docreview.sh       verify + auto-repair the wiring (agents, hooks, and CI all run it)
-.claude/skills/docreview/  the /docreview skill: wiring check + doc-doctrine audit
+.claude/skills/docreview/  the /docreview skill: wiring check + doc-doctrine audit (canonical)
   reference/doctrine.md      CLAUDE.md rubric, 9 audit axes, size budgets, fix-classes
   reference/skill-axes.md    rubric for reviewing SKILL.md files
-.gitignore                 ignores CLAUDE.local.md + clobbered-symlink backups
+.agents/skills → .claude/skills   symlink: Codex + Antigravity read Claude's skills through it
+.gitignore                 ignores CLAUDE.local.md + clobbered backups
 ```
 
 ### Cloud sync & symlinks
@@ -105,10 +132,10 @@ SRC=path/to/MultiAgentSetup; DST=.
 mkdir -p "$DST"/{scripts,.claude/skills}
 cp "$SRC"/CLAUDE.md "$DST"/                          # then replace CLAUDE.md's rules with yours
 cp "$SRC"/scripts/docreview.sh "$DST"/scripts/
-cp -r "$SRC"/.claude/skills/docreview "$DST"/.claude/skills/
+cp -r "$SRC"/.claude/skills/docreview "$DST"/.claude/skills/   # canonical skill
 cat "$SRC"/.gitignore >> "$DST"/.gitignore          # or merge by hand
-ln -snf CLAUDE.md "$DST"/AGENTS.md
-bash "$DST"/scripts/docreview.sh                     # expect: docreview: PASS
+ln -snf CLAUDE.md "$DST"/AGENTS.md                   # rules symlink
+bash "$DST"/scripts/docreview.sh                     # mints skill mirrors (.agents/skills…); expect: docreview: PASS
 ```
 
 For an agent that can't see this repo's files, paste the full [Bootstrap Prompt](#bootstrap-prompt) instead.
@@ -144,22 +171,29 @@ CLAUDE.md as the single canonical rulebook the other agents point at. Do all of 
    here), AGENTS.md is a symlink to it, .claude/rules/ is Claude-only, never write to AGENTS.md,
    run /docreview after edits — plus a "Scoped CLAUDE.md files" rule: add a folder-level CLAUDE.md
    only when that folder has a foot-gun not obvious from its code, point to root, keep it <=80 lines.
-   If shared rules currently live in AGENTS.md / .cursorrules / elsewhere, consolidate into CLAUDE.md first.
+   If shared rules are scattered across AGENTS.md / .cursorrules / GEMINI.md / other docs, find them
+   all, consolidate the real ones into CLAUDE.md (de-dupe, drop stale), and remove the now-redundant
+   copies — one source of truth.
 2. AGENTS.md: delete any existing file, then  ln -snf CLAUDE.md AGENTS.md
 3. scripts/docreview.sh: create the verify/auto-repair script that enforces this topology
    (CLAUDE.md real canonical; AGENTS.md symlink→CLAUDE.md, creating it if missing and re-linking +
    backing up a clobbered diverging AGENTS.md to AGENTS.md.clobbered-<ts>; no circular @./AGENTS.md
-   in CLAUDE.md). chmod +x it.
-4. .claude/skills/docreview/SKILL.md: a "docreview" skill that runs bash scripts/docreview.sh,
-   reports the result, handles AGENTS.md.clobbered-* backups (summarize the diff, ask before
-   folding in), and re-runs to confirm PASS.
-5. .gitignore: add CLAUDE.local.md and AGENTS.md.clobbered-*.
+   in CLAUDE.md; and the skills mirror .agents/skills (read by Codex + Antigravity) as a folder
+   symlink to .claude/skills, re-linking if missing/wrong and backing up real copies). chmod +x it.
+4. .claude/skills/docreview/SKILL.md: a canonical "docreview" skill that runs bash
+   scripts/docreview.sh, reports the result, handles AGENTS.md.clobbered-* backups (summarize the
+   diff, ask before folding in), and re-runs to confirm PASS. Do NOT copy the skill into other agents'
+   dirs — docreview.sh folder-symlinks .agents/skills -> .claude/skills so Codex and Antigravity
+   read the same canonical skill.
+5. .gitignore: add CLAUDE.local.md and AGENTS.md.clobbered-* (also covers skill-mirror backups).
 6. Run bash scripts/docreview.sh, confirm "docreview: PASS", then summarize and remind me to edit
-   shared rules only in CLAUDE.md.
+   shared rules and skills only in their canonical home (CLAUDE.md / .claude/skills/).
 
 Context: Codex (CLI + desktop) + Antigravity (CLI + desktop) read AGENTS.md but can't auto-@import,
 which is why AGENTS.md is a symlink (they read CLAUDE.md's bytes directly). Claude Code reads
-CLAUDE.md natively. The only fragility is an atomic-save turning the symlink into a regular file —
+CLAUDE.md natively. Skills work the same way: Claude's .claude/skills/ is canonical and is
+folder-symlinked into .agents/skills (read by Codex and Antigravity), so a skill is authored once and
+read by all three. The only fragility is an atomic-save turning a symlink into a regular file —
 docreview repairs that. OneDrive/Google Drive on macOS preserve symlinks; git stores them mode
 120000; Windows needs Developer Mode + core.symlinks=true.
 ```
