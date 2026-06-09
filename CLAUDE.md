@@ -11,7 +11,7 @@
   (a folder symlink). Author/edit skills there, never through the mirror; `docreview` maintains it.
 - Claude-only rules live in `.claude/rules/`.
 - **Never write to `AGENTS.md`** — it is a symlink; an atomic-save there clobbers the link. Always edit `CLAUDE.md`.
-- Run `/docreview` (or `bash scripts/docreview.sh`) to verify/repair this wiring and audit the docs.
+- Run `/docreview` (or `python3 scripts/docreview.py`) to verify/repair this wiring and audit the docs.
 
 ## Scoped CLAUDE.md files
 - Start with just root `CLAUDE.md`. Add a scoped `CLAUDE.md` to a folder/subsystem **when it grows a

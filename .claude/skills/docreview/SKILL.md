@@ -19,7 +19,7 @@ it's a symlink to `CLAUDE.md`.** A scope arg (a path, a glob, or "just the wirin
 
 1. Run the repo-level script from the root:
    ```bash
-   bash scripts/docreview.sh
+   python3 scripts/docreview.py
    ```
    It verifies + auto-repairs: `CLAUDE.md` is the real canonical file; `AGENTS.md` is a symlink →
    `CLAUDE.md` (re-links if missing/wrong); the skills mirror `.agents/skills` (Codex + Antigravity)
@@ -30,9 +30,9 @@ it's a symlink to `CLAUDE.md`.** A scope arg (a path, a glob, or "just the wirin
    Do not discard the backup without confirmation.
 4. After any repair, re-run the script and confirm `docreview: PASS`.
 
-> The script lives at **`scripts/docreview.sh`, not inside this skill, on purpose**: the wiring is a
+> The script lives at **`scripts/docreview.py`, not inside this skill, on purpose**: the wiring is a
 > *cross-agent* concern — Codex, Antigravity, and any pre-commit hook / CI all run
-> `bash scripts/docreview.sh`. Burying it under `.claude/` would make shared infrastructure
+> `python3 scripts/docreview.py`. Burying it under `.claude/` would make shared infrastructure
 > Claude-private. The skill is just a convenience entry point to it for whichever agent you're in
 > (Claude natively; Codex & Antigravity through the `.agents/skills` symlink).
 
@@ -110,7 +110,7 @@ to a single agent so the audit stays reproducible.
   each is a claim to check, not a fact.
 - **Descriptive vs aspirational (axis 8).** If the doc describes reality and reality disagrees, fix
   the doc. If it states an intent, tag `ASPIRATIONAL` and ask — the gap may be a real bug.
-- **The skill is a wrapper, not the owner of the script.** Don't move `scripts/docreview.sh` into
+- **The skill is a wrapper, not the owner of the script.** Don't move `scripts/docreview.py` into
   this skill folder; it must stay runnable by every agent and any hook/CI.
 
 ## Self-check before reporting
