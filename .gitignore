@@ -4,5 +4,5 @@
 # Local agent prefs (Claude reads this but it's machine-local)
 CLAUDE.local.md
 
-# docreview backups (clobbered AGENTS.md snapshots)
-AGENTS.md.clobbered-*
+# docreview backups (clobbered symlink snapshots: AGENTS.md, .agents/skills, …)
+*.clobbered-*

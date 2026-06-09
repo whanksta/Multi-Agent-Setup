@@ -102,6 +102,8 @@ to a single agent so the audit stays reproducible.
 
 - **`AGENTS.md` is the symlink — audit `CLAUDE.md`, not it.** Part 1 checks the link; Part 2 reads
   through it.
+- **`.agents/skills/` is a symlink to `.claude/skills/` — audit each skill once under
+  `.claude/skills/`, never via the mirror,** or you double-count the same `SKILL.md`.
 - **CLAUDE.md's size budget pays off 3×.** It's the always-loaded file for all three agents — Claude
   natively, Codex and Antigravity via the symlink — so a trim there is a trim for everyone.
 - **Verify, don't trust the doc about itself.** "N/N passing", a path that "exists", "X is wired" —

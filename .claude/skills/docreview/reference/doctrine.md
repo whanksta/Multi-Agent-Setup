@@ -195,6 +195,8 @@ The wiring this kit uses changes how a few axes apply:
 
 - **`AGENTS.md` is a symlink to `CLAUDE.md`** — never audit it as a separate file; auditing
   `CLAUDE.md` covers it. (The wiring check in Part 1 confirms the link itself.)
+- **`.agents/skills/` is a symlink to `.claude/skills/`** — Codex/Antigravity read skills through it;
+  audit each skill once under `.claude/skills/`, never via the mirror. Part 1 confirms the link.
 - **CLAUDE.md's budget matters 3×.** It's the always-loaded file for Claude *and* (via the symlink)
   Codex and Antigravity. Trim wins here pay off three times.
 - **Secrets compound on sync/public repos (C9).** A leaked credential in any instruction file is a
