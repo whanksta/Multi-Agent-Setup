@@ -7,7 +7,7 @@ Contents:
 - [Loading model](#loading-model) — what's always loaded vs on-demand vs referenced
 - [Size budgets](#size-budgets) — the non-blank-line ceilings + verdict scale
 - [CLAUDE.md authoring rubric (C1–C10)](#claudemd-authoring-rubric-c1c10)
-- [The 9 audit axes](#the-9-audit-axes) — catch + verify command for each
+- [The 10 audit axes](#the-10-audit-axes) — catch + verify command for each
 - [Scope-discipline principles](#scope-discipline-principles)
 - [Fix-classes](#fix-classes) — how a finding routes to an edit
 - [Multi-agent specifics](#multi-agent-specifics) — the wiring this kit uses
@@ -73,8 +73,8 @@ Classify each finding **BLOCKER** (breaks loading/correctness) / **SHOULD** (deg
 |------|-------|--------------------|
 | **C1 Size** | Bloat dilutes adherence | < 200 non-blank lines (root). Cut anything learnable in one session (file locations, obvious commands); move occasional-reference material behind a pointer. |
 | **C2 Specificity + imperative** | Vague / observational rules | Concrete + verifiable, not aspirational. Direct commands ("never X") not observations ("we generally don't"). **Prefer exact, copy-pasteable commands (`uv run pytest tests/unit/ -v`) over vague tool names ("run the tests").** Mark load-bearing rules `IMPORTANT`/`YOU MUST`. Include **negative** rules, not only positive. |
-| **C3 Beyond-inference** | Restating what code already says | Keep only what's NOT derivable from reading code (conventions, "why we rejected X", domain decodes, non-obvious gotchas). Delete restated signatures / directory listings. |
-| **C4 No contradiction** | Conflicting guidance across layers | Cross-check root ↔ scoped ↔ auto-memory. **Precedence: the more deeply-nested file wins within its subtree; root holds everywhere else** — a scoped rule *refining* root is a valid override, not a defect. Flag true conflicts: two layers disagreeing at the *same* scope, a scoped rule contradicting a meant-to-be-universal root rule, a rule contradicting verified code/behavior, or a stale survivor of a reversed instruction. |
+| **C3 Beyond-inference** | Restating what code already says | Keep only what's NOT derivable from reading code (conventions, "why we rejected X", domain decodes, non-obvious gotchas) — and not already known to the model: generic best practices ("write tests", "use meaningful names") are noise. Delete restated signatures / directory listings. |
+| **C4 No contradiction** | Conflicting guidance across layers | Cross-check every loaded layer: root ↔ scoped ↔ `CLAUDE.local.md` ↔ `~/.claude/CLAUDE.md` (global) ↔ auto-memory — flag conflicts with the global file but don't audit it (not repo-owned). **Precedence: the more deeply-nested file wins within its subtree; root holds everywhere else** — a scoped rule *refining* root is a valid override, not a defect. Flag true conflicts: two layers disagreeing at the *same* scope, a scoped rule contradicting a meant-to-be-universal root rule, a rule contradicting verified code/behavior, or a stale survivor of a reversed instruction. |
 | **C5 Structure** | Rules buried in prose | Headers + bullets, scannable. Split dense multi-claim paragraphs; one idea per bullet. |
 | **C6 Scope placement** | Rule in the wrong layer | A hold-**everywhere** rule belongs in **root** (scoped files may not load / don't survive `/compact`) — an always-rule living only in a scoped file is a **BLOCKER**. A folder-only rule bloating root is a SHOULD-fix. |
 | **C7 Freshness / no drift** | Stale counts, dates, paths | Verify every count/claim against reality (run the test, grep the source, `ls` the folder). Make relative dates absolute ("as of 2026-06-08", not "recently"). Flag paths/modules that no longer exist. |
@@ -84,15 +84,17 @@ Classify each finding **BLOCKER** (breaks loading/correctness) / **SHOULD** (deg
 
 ---
 
-## The 9 audit axes
+## The 10 audit axes
 
 Run every axis against each in-scope doc. Each has a one-line catch and a verify recipe.
 
 **1 — Trim.** Bloat; walls of text that should be tables; rationale dumps where a pointer would do.
 Size-budget violations on always-loaded files.
 ```sh
-for f in CLAUDE.md .claude/rules/*.md; do printf "%-32s %s\n" "$f" "$(grep -cE '[^[:space:]]' "$f" 2>/dev/null)"; done
+find CLAUDE.md .claude/rules -name '*.md' 2>/dev/null | while read -r f; do printf "%-40s %s\n" "$f" "$(grep -cE '[^[:space:]]' "$f")"; done
 ```
+(`find`, not a shell glob — in zsh a failed glob like `.claude/rules/*.md` aborts the whole
+command when the dir is empty or missing.)
 
 **2 — Tighten.** Restatement of parent doctrine in a child doc; scope creep; imprecise wording;
 forensic/transient detail (one-off command output, state snapshots) sitting in the doctrine body.
@@ -100,7 +102,7 @@ Judgment axis — open the linked doc and compare.
 
 **3 — Conflict.** Cross-doc contradictions (same fact stated two ways) + internal contradictions.
 ```sh
-grep -nE "<term-A>|<term-B>" CLAUDE.md docs/*.md
+grep -rnE --include='*.md' "<term-A>|<term-B>" CLAUDE.md docs/ 2>/dev/null
 ```
 Resolve by authority: the doc that owns the topic wins; rewrite the loser.
 
@@ -111,10 +113,11 @@ grep -rnE "(Variant1|Variant2)" .   # then pick canonical, re-sweep to confirm z
 ```
 
 **5 — Staleness + volatility.** *Stale* = facts that rotted (counts changed, items renamed/moved,
-"as of <date>" aged, resolved items still listed open). *Volatile* = facts that WILL rot and
+"as of <date>" aged, resolved items still listed open, never-completed TODOs, template
+scaffolding never customized). *Volatile* = facts that WILL rot and
 shouldn't be in always-loaded doctrine at all (dates, versions, owners, "currently using X").
 ```sh
-grep -rnE "as of [0-9]{4}-[0-9]{2}-[0-9]{2}|currently|recently" CLAUDE.md docs/
+grep -rnE "as of [0-9]{4}-[0-9]{2}-[0-9]{2}|currently|recently" CLAUDE.md docs/ 2>/dev/null
 ```
 Stale → update/remove. Volatile → move to git history / CHANGELOG / a live-state doc + leave a stable rule.
 
@@ -124,15 +127,16 @@ genuinely-broad content up. Collapse pointer-only headings.
 
 **7 — Reachability.** Broken file links, dead anchors, unexpanded acronyms.
 ```sh
-grep -hoE "\]\([^)]+\.md[^)]*\)" CLAUDE.md docs/*.md \
+grep -rhoE --include='*.md' "\]\([^)]+\.md[^)]*\)" CLAUDE.md docs/ 2>/dev/null \
   | sed -E 's/^\]\(//; s/\)$//' | sort -u \
-  | while read l; do f="${l%%#*}"; [ -z "$f" ] || [ -e "$f" ] || echo "MISSING: $l"; done
+  | while read -r l; do f="${l%%#*}"; [ -z "$f" ] || [ -e "$f" ] || echo "MISSING: $l"; done
 ```
 Anchors: confirm a matching `## Heading` exists. Acronyms: expand once as `Full Name (TLA)`.
 
 **8 — Doctrine-vs-reality.** A claim ("X is wired", "we use Y", "no Z", "module M exists") not
 backed by the repo. **Verify, don't trust.** For each load-bearing claim, run the grep/ls that
-proves or disproves it.
+proves or disproves it. Documented commands are claims too — run each one (its `--help`/dry-run
+form if destructive); a documented command that fails is drift.
 ```sh
 grep -rn "<forbidden-pattern>" .      # "Z is never used" → must return nothing
 ls <dir>/ 2>/dev/null                  # "module M exists" / "no code yet" → check
@@ -148,6 +152,17 @@ worked example, code block ≥ 20 lines) in an always-loaded file → move to a 
 awk '/^## /{if(last)print last_l,last; last=$0; last_l=0; next}{last_l++}END{if(last)print last_l,last}' CLAUDE.md | sort -rn | head
 ```
 Do NOT apply to short gotchas, axiom one-liners, or anything needed every turn.
+
+**10 — Completeness.** The inverse of Trim: the operational knowledge a fresh session needs is
+present, project-specific, and runnable — install/build/test/lint commands (copy-paste ready),
+required env vars, non-obvious gotchas. Probe menu, only where the project warrants: Commands,
+Environment, Testing, Gotchas, Key Files, Code Style, Workflow. Missing-but-needed = SHOULD.
+```sh
+ls package.json Makefile pyproject.toml Cargo.toml go.mod 2>/dev/null   # each build surface that
+                                          # exists should have documented, runnable commands
+```
+Completeness never licenses directory listings or generic advice — C3 still deletes those. It asks
+for the missing *contract*, not more content.
 
 ---
 
@@ -186,6 +201,9 @@ Tag each finding so the apply step knows what edit it implies:
 - `[propose-hook]` — advisory prose describing must-happen behavior that should be a deterministic
   hook. **NOT applied as a doc edit.** Surface to the user with the proposed hook (which event,
   what guard) — never silently deferred.
+- `[propose-script]` — deterministic multi-step skill prose that should be a bundled `scripts/`
+  helper (skill rubric axis 12). **NOT applied as a doc edit** — docreview doesn't author code;
+  surface the proposed script's job and call-site.
 
 ---
 

@@ -12,12 +12,14 @@
 - Claude-only rules live in `.claude/rules/`.
 - **Never write to `AGENTS.md`** — it is a symlink; an atomic-save there clobbers the link. Always edit `CLAUDE.md`.
 - Run `/docreview` (or `python3 scripts/docreview.py`) to verify/repair this wiring and audit the docs.
+- A pre-commit hook runs the script automatically — enable once per clone: `git config core.hooksPath .githooks`.
 
 ## Scoped CLAUDE.md files
 - Start with just root `CLAUDE.md`. Add a scoped `CLAUDE.md` to a folder/subsystem **when it grows a
   convention or foot-gun not obvious from its code, or when root crosses ~200 lines** and a section
   is folder-specific. If you can't name the reason in one sentence, don't create the file.
 - Scoped files **point to** root doctrine — never restate it. Keep each ≤ 80 non-blank lines.
+- Keep root `CLAUDE.md` under ~200 non-blank lines; push heavy content into `docs/` or a skill.
 - A must-hold-**everywhere** rule belongs in **root** `CLAUDE.md` — scoped files load only when that
   folder is touched and don't survive `/compact`.
 - **On conflict, the more deeply-nested file wins for its subtree; root holds everywhere else.**
@@ -25,5 +27,4 @@
 
 ## Conventions (example — replace with your own)
 - Secrets via environment variables only — never commit keys.
-- Branch per task; open a PR for review (cross-agent review encouraged).
-- Keep `CLAUDE.md` under ~200 non-blank lines; push heavy content into `docs/` or a skill.
+- Branch per task; open a PR for review; have a different agent review than the one that authored.

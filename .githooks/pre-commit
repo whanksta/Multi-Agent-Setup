@@ -1,0 +1,5 @@
+#!/bin/sh
+# Verify multi-agent instruction-file wiring + size budgets before each commit.
+# Enable once per clone: git config core.hooksPath .githooks
+# Exits non-zero on failure OR after an auto-repair (stage the repair, commit again).
+python3 scripts/docreview.py
