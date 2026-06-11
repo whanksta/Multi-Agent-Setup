@@ -1,6 +1,6 @@
 ---
 name: docreview
-description: Verify and repair the multi-agent instruction-file wiring (CLAUDE.md canonical, AGENTS.md symlink → CLAUDE.md) AND audit the documentation surface against doc doctrine — size budgets, scope placement, staleness/drift, broken links, doctrine-vs-reality, and CLAUDE.md / SKILL.md authoring quality. Use to check or fix AGENTS.md/CLAUDE.md consistency, after any agent may have edited an instruction file, when the AGENTS.md symlink may have been clobbered, when a CLAUDE.md is bloated/stale/duplicative, or before committing changes to instruction files or skills. Triggers - /docreview, "check doc wiring", "audit docs", "review CLAUDE.md", "doc drift", "is this skill well written".
+description: Verifies and repairs the multi-agent instruction-file wiring (CLAUDE.md canonical, AGENTS.md symlink → CLAUDE.md) AND audits the documentation surface against doc doctrine — size budgets, scope placement, staleness/drift, broken links, doctrine-vs-reality, and CLAUDE.md / SKILL.md authoring quality. Use to check or fix AGENTS.md/CLAUDE.md consistency, after any agent may have edited an instruction file, when the AGENTS.md symlink may have been clobbered, when a CLAUDE.md is bloated/stale/duplicative, or before committing changes to instruction files or skills. Triggers - /docreview, "check doc wiring", "audit docs", "review CLAUDE.md", "doc drift", "is this skill well written".
 ---
 
 # docreview
@@ -10,7 +10,7 @@ is a judgment audit — run it on request, before committing instruction-file ch
 a doc looks bloated/stale.
 
 Scope by default: this repo's instruction surface — `CLAUDE.md`, `.claude/rules/*`,
-anything under `docs/`, and any scoped `*/CLAUDE.md`. **Never audit `AGENTS.md` as its own file —
+anything under `docs/`, any scoped `*/CLAUDE.md`, and `CLAUDE.local.md` if present. **Never audit `AGENTS.md` as its own file —
 it's a symlink to `CLAUDE.md`.** A scope arg (a path, a glob, or "just the wiring") narrows the run.
 
 ---
@@ -23,7 +23,9 @@ it's a symlink to `CLAUDE.md`.** A scope arg (a path, a glob, or "just the wirin
    ```
    It verifies + auto-repairs: `CLAUDE.md` is the real canonical file; `AGENTS.md` is a symlink →
    `CLAUDE.md` (re-links if missing/wrong); the skills mirror `.agents/skills` (Codex + Antigravity)
-   is a folder symlink → `.claude/skills`; no circular `@./AGENTS.md` in `CLAUDE.md`.
+   is a folder symlink → `.claude/skills`; no circular `@./AGENTS.md` in `CLAUDE.md`. It also
+   audits size budgets — non-blank counts + PASS/WITHIN-SLACK/OVER verdicts for root and scoped
+   `CLAUDE.md` and `.claude/rules/` files.
 2. Report which files were `ok`, `FIX`ed, or `WARN`ed.
 3. If it saved an `AGENTS.md.clobbered-*` backup (an agent wrote diverging rules into the symlink),
    open that backup, summarize what differs from `CLAUDE.md`, and **ask** before folding changes in.
@@ -43,21 +45,21 @@ If the user only asked to "check the wiring," stop here.
 ## Part 2 — Doctrine audit (judgment)
 
 Before starting, **read [`reference/doctrine.md`](reference/doctrine.md)** — the size budgets,
-the C1–C10 CLAUDE.md rubric, the 9 audit axes (each with a verify command), the scope-discipline
+the C1–C10 CLAUDE.md rubric, the 10 audit axes (each with a verify command), the scope-discipline
 principles, and the fix-class tags. When the target is a *skill* (a `SKILL.md`), also read
 [`reference/skill-axes.md`](reference/skill-axes.md).
 
 Procedure:
 
 1. **Inventory.** List in-scope files with non-blank line counts vs budget. Print it first — a
-   silent scope expansion is the most common failure mode.
+   silent scope expansion is the most common failure mode. For always-loaded files, reuse the
+   counts + verdicts the Part 1 script just printed (budget tiers: `reference/doctrine.md` →
+   Size budgets). Count other in-scope files (`docs/`, skill references — no ceiling) with:
    ```bash
-   for f in CLAUDE.md .claude/rules/*.md; do printf "%-32s %s\n" "$f" "$(grep -cE '[^[:space:]]' "$f" 2>/dev/null)"; done
+   find docs -name '*.md' 2>/dev/null | while read -r f; do printf "%-40s %s\n" "$f" "$(grep -cE '[^[:space:]]' "$f")"; done
    ```
-   Verdict each always-loaded file PASS / WITHIN-SLACK (<1.5×) / OVER (≥1.5×). Budgets: root
-   `CLAUDE.md` ≤ 200, scoped ≤ 80 non-blank lines.
 2. **Run every axis** from `reference/doctrine.md` against each file, using its verify command —
-   don't eyeball. For `CLAUDE.md` also walk the C1–C10 rubric; for a skill, walk axes 1–10 in
+   don't eyeball. For `CLAUDE.md` also walk the C1–C10 rubric; for a skill, walk axes 1–12 in
    `reference/skill-axes.md`. **Verify every claim against reality** (run the grep, `ls` the
    folder) — drift is the most common real defect, so claims like "X is wired", "N/N tests
    passing", or "module M exists" must be checked, not trusted.
@@ -127,5 +129,8 @@ to a single agent so the audit stays reproducible.
 
 - **Edit code.** Doc/instruction files only. Code mismatches found via axis 8 are reported, not fixed.
 - **Auto-commit or auto-push.** Produces a draft message; the user commits.
-- **Author hooks.** Prose that should be a hook is tagged `[propose-hook]` and surfaced to the user.
+- **Author hooks or scripts.** Prose that should be a hook or bundled script is tagged
+  `[propose-hook]` / `[propose-script]` and surfaced to the user.
+- **Benchmark or A/B-test skills.** The skill audit is static review plus running the skill's own
+  commands (axis 11); empirical eval loops are development workflow, not audit.
 - **Re-architect docs.** Trim, tighten, fix conflicts/drift — not "rewrite the architecture doc."
