@@ -8,13 +8,42 @@ batches available once committed.
 
 Historical entries were reconstructed from Git history through `7b20a84`.
 
+## 2026-06-12
+
+### Changed
+
+- Clarified the repo-link adoption protocol: agents must always read `README.md` and
+  `CHANGELOG.md`, then identify what changed from the target repo's current implementation before
+  installing or updating.
+- Made exact replication the default for kit-owned files and symlinks, including
+  `scripts/docreview.py`, `.claude/skills/docreview/`, `.githooks/pre-commit`, `AGENTS.md`, and
+  `.agents/skills`.
+- Modernized `scripts/docreview.py` into a cleaner source-template style: sorted imports,
+  pathlib-first helpers, typed functions, shared ignore-directory constants, and wrapped diagnostics
+  while preserving the same wiring and budget checks.
+- Added Python bytecode cache ignores to `.gitignore` for `__pycache__/` and `*.py[cod]`.
+- Clarified the one merge/blend exception: root `CLAUDE.md` is the target repo's master instruction
+  file, so existing project-specific instructions must be preserved and blended instead of
+  overwritten.
+- Updated README links and prompts to use the canonical moved repo URL:
+  `https://github.com/whanksta/Multi-Agent-Setup`.
+
+### Adoption Notes
+
+- For new installs, replicate kit-owned files exactly and customize only root `CLAUDE.md`.
+- For existing installs, compare against the current source repo and changelog before editing; copy
+  kit-owned files exactly, merge only root `CLAUDE.md`, and preserve unrelated project `.gitignore`
+  entries.
+- Replace `scripts/docreview.py` from the source repo exactly, even when the target repo's older
+  version is functionally similar; this carries the canonical script style forward.
+
 ## 2026-06-11
 
 ### Added
 
 - Added this changelog as the update notes carried by the repo link itself.
 - Added README guidance for the link-only workflow: users can paste
-  `https://github.com/whanksta/MultiAgentSetup` into an agent for both first install and later
+  `https://github.com/whanksta/Multi-Agent-Setup` into an agent for both first install and later
   updates.
 - Added an "Update an installed repo" agent prompt that tells future agents to read this README and
   changelog before adopting changes.

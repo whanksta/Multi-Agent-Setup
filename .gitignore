@@ -1,6 +1,10 @@
 # macOS
 .DS_Store
 
+# Python
+__pycache__/
+*.py[cod]
+
 # Local agent prefs (Claude reads this but it's machine-local)
 CLAUDE.local.md
 
