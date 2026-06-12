@@ -2,4 +2,13 @@
 # Verify multi-agent instruction-file wiring + size budgets before each commit.
 # Enable once per clone: git config core.hooksPath .githooks
 # Exits non-zero on failure OR after an auto-repair (stage the repair, commit again).
-python3 scripts/docreview.py
+before="$(git status --porcelain=v1)"
+
+python3 scripts/docreview.py || exit $?
+
+after="$(git status --porcelain=v1)"
+if [ "$before" != "$after" ]; then
+  echo "docreview changed the working tree; stage the repair and commit again."
+  git status --short
+  exit 1
+fi

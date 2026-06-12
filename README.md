@@ -139,19 +139,25 @@ SRC=path/to/Multi-Agent-Setup
 DST=.
 
 mkdir -p "$DST"/{scripts,.claude/skills}
-cp "$SRC"/CLAUDE.md "$DST"/
 cp "$SRC"/scripts/docreview.py "$DST"/scripts/
 cp -r "$SRC"/.claude/skills/docreview "$DST"/.claude/skills/
 mkdir -p "$DST"/.githooks
 cp "$SRC"/.githooks/pre-commit "$DST"/.githooks/
 cat "$SRC"/.gitignore >> "$DST"/.gitignore
+
+if [ -e "$DST"/CLAUDE.md ]; then
+  echo "CLAUDE.md exists; merge the wiring sections from $SRC/CLAUDE.md manually."
+else
+  cp "$SRC"/CLAUDE.md "$DST"/
+fi
+
 ln -snf CLAUDE.md "$DST"/AGENTS.md
 python3 "$DST"/scripts/docreview.py
 ```
 
-After copying, replace the template conventions in `CLAUDE.md` with your project's real rules. For
-existing repos, merge the `CLAUDE.md` sections into the current project instructions instead of
-overwriting them.
+For new repos, replace the template conventions in `CLAUDE.md` with your project's real rules. For
+existing repos, merge the source `CLAUDE.md` wiring sections into the current project instructions
+instead of overwriting them.
 
 ## Compatibility
 
@@ -185,6 +191,8 @@ python3 scripts/docreview.py
 
 If an agent clobbers a symlink with a real file, `docreview` backs up the divergent content to a
 `*.clobbered-<timestamp>` file before restoring the symlink.
+
+Requires Python 3.7+.
 
 ## FAQ
 
