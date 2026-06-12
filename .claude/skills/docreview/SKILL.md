@@ -5,13 +5,24 @@ description: Verifies and repairs the multi-agent instruction-file wiring (CLAUD
 
 # docreview
 
-Two jobs, run in order. **Part 1 (wiring)** is mechanical and always runs. **Part 2 (doctrine)**
-is a judgment audit — run it on request, before committing instruction-file changes, or whenever
-a doc looks bloated/stale.
+Two jobs, run in order. **Part 1 (wiring)** is mechanical and always runs first; after any doctrine
+fixes, run it again as the final check. **Part 2 (doctrine)** is a judgment audit — run it on
+request, before committing instruction-file changes, or whenever a doc looks bloated/stale.
 
-Scope by default: this repo's instruction surface — `CLAUDE.md`, `.claude/rules/*`,
-anything under `docs/`, any scoped `*/CLAUDE.md`, and `CLAUDE.local.md` if present. **Never audit `AGENTS.md` as its own file —
-it's a symlink to `CLAUDE.md`.** A scope arg (a path, a glob, or "just the wiring") narrows the run.
+Choose one doctrine mode after Part 1:
+
+- **Full doc review** — use when the user asks for a full / repo-wide / all-docs audit, before a
+  release, or before committing documentation-system changes. Audit every repo-owned Markdown doc
+  exactly once: `CLAUDE.md`, `CLAUDE.local.md` if present, scoped `*/CLAUDE.md`,
+  `.claude/rules/*.md`, `.claude/skills/**/*.md`, top-level docs such as `README.md` /
+  `CHANGELOG.md`, and anything under `docs/`.
+- **Scoped doc review** — use when the user names a path, glob, skill, subsystem, or asks to review
+  recent/touched docs. Audit only that target set plus any docs it directly links to or depends on
+  for doctrine. State the chosen scope before inventorying it.
+
+Exclude generated/dependency dirs and symlink mirrors in both modes. **Never audit `AGENTS.md` as
+its own file — it's a symlink to `CLAUDE.md`. Never audit `.agents/skills` separately — it's a
+mirror of `.claude/skills`.** If the user only asks for "just the wiring," run Part 1 and stop.
 
 ---
 
@@ -51,24 +62,34 @@ principles, and the fix-class tags. When the target is a *skill* (a `SKILL.md`),
 
 Procedure:
 
-1. **Inventory.** List in-scope files with non-blank line counts vs budget. Print it first — a
+1. **Pick and state the mode.** Say whether this is a full doc review or scoped doc review and list
+   the target set. If the user asked only for wiring, skip Part 2.
+2. **Inventory.** List in-scope files with non-blank line counts vs budget. Print it first — a
    silent scope expansion is the most common failure mode. For always-loaded files, reuse the
    counts + verdicts the Part 1 script just printed (budget tiers: `reference/doctrine.md` →
-   Size budgets). Count other in-scope files (`docs/`, skill references — no ceiling) with:
+   Size budgets). For full doc review, count every other in-scope Markdown doc (no ceiling) with:
    ```bash
-   find docs -name '*.md' 2>/dev/null | while read -r f; do printf "%-40s %s\n" "$f" "$(grep -cE '[^[:space:]]' "$f")"; done
+   find . \
+     \( -path './.git' -o -path './.agents' -o -path './node_modules' -o -path './.venv' -o -path './venv' -o -path './build' -o -path './dist' \) -prune -o \
+     -name '*.md' ! -name 'AGENTS.md' -print | sort \
+     | while read -r f; do printf "%-70s %s\n" "$f" "$(grep -cE '[^[:space:]]' "$f")"; done
    ```
-2. **Run every axis** from `reference/doctrine.md` against each file, using its verify command —
-   don't eyeball. For `CLAUDE.md` also walk the C1–C10 rubric; for a skill, walk axes 1–12 in
-   `reference/skill-axes.md`. **Verify every claim against reality** (run the grep, `ls` the
-   folder) — drift is the most common real defect, so claims like "X is wired", "N/N tests
-   passing", or "module M exists" must be checked, not trusted.
-3. **Emit findings** in the format below. Tag each with a fix-class.
-4. **Confirm before editing.** Summarize which files change, how many lines, which axes drove it.
+   For scoped doc review, run the same count shape against the selected files only, then add direct
+   dependency docs that the target relies on.
+3. **Run every axis** from `reference/doctrine.md` against each in-scope Markdown file, using its
+   verify command — don't eyeball. For `CLAUDE.md` also walk the C1–C10 rubric; for each
+   `.claude/skills/*/SKILL.md`, also walk axes 1–12 in `reference/skill-axes.md`. Skill reference
+   files are regular docs: run the doctrine axes, then verify their links from the owning skill.
+   **Verify every claim against reality** (run the grep, `ls` the folder) — drift is the most
+   common real defect, so claims like "X is wired", "N/N tests passing", or "module M exists" must
+   be checked, not trusted.
+4. **Emit findings** in the format below. Tag each with a fix-class.
+5. **Confirm before editing.** Summarize which files change, how many lines, which axes drove it.
    Wait for go-ahead. (Any plan-mode rules in `.claude/rules/` still apply.)
-5. **Apply** approved fixes; re-run axes 1 (Trim), 7 (Reachability), 8 (Doctrine-vs-reality) on
-   touched files; if any always-loaded file is still OVER, surface it. Then re-run Part 1.
-6. **Commit** — the user runs it. Offer a draft message; never auto-commit or auto-push.
+6. **Apply** approved fixes; re-run axes 1 (Trim), 7 (Reachability), 8 (Doctrine-vs-reality) on
+   touched files; if any always-loaded file is still OVER, surface it. Then re-run Part 1
+   (`python3 scripts/docreview.py`) as the final mechanical check and confirm `docreview: PASS`.
+7. **Commit** — the user runs it. Offer a draft message; never auto-commit or auto-push.
 
 ### Findings format
 
@@ -76,6 +97,8 @@ Procedure:
 ## docreview — findings
 
 ### Inventory
+Mode: full doc review
+
 | File | Non-blank | Budget | Verdict |
 |------|-----------|--------|---------|
 | CLAUDE.md | 56 | ≤200 | PASS |
@@ -118,7 +141,9 @@ to a single agent so the audit stays reproducible.
 ## Self-check before reporting
 
 - Ran Part 1 and confirmed `PASS` (or surfaced the clobbered backup)?
+- Stated `full doc review` or `scoped doc review` and listed the target set?
 - Printed the inventory + per-file verdict before auditing?
+- Audited every in-scope Markdown doc exactly once, excluding `AGENTS.md` and `.agents/skills`?
 - Ran every axis with its verify command — not from memory?
 - Every finding cites `file:line`, names its axis, carries a fix-class, has a severity?
 - Verified every count/path/claim I flagged (or relied on) against reality?

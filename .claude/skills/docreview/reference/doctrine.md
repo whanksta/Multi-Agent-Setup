@@ -25,8 +25,9 @@ The whole doctrine rests on *when* a doc enters the context window:
 - **Scoped / on-demand.** A `*/CLAUDE.md` (or `.claude/rules/` file) loads only when an agent
   touches that folder, and **does NOT survive `/compact`**. A rule that must hold *everywhere*
   but lives only in a scoped file will be silently missed — that's a BLOCKER (axis 6 / C6).
-- **Referenced-not-loaded.** `docs/*.md`, reference files like this one — cost nothing until
-  something opens them. No hard size ceiling, but still flag genuine bloat.
+- **Referenced-not-loaded.** `README.md`, `CHANGELOG.md`, `docs/*.md`, skill reference files, and
+  reference files like this one cost nothing until something opens them. No hard size ceiling, but
+  still flag genuine bloat.
 
 Three consequences:
 - **CLAUDE.md is a contract surface, not a content surface.** Contracts + pointers live there;
@@ -86,7 +87,9 @@ Classify each finding **BLOCKER** (breaks loading/correctness) / **SHOULD** (deg
 
 ## The 10 audit axes
 
-Run every axis against each in-scope doc. Each has a one-line catch and a verify recipe.
+Run every axis against each in-scope doc. Each has a one-line catch and a verify recipe. When a
+recipe names example paths like `CLAUDE.md docs/`, substitute the audited inventory for the current
+full or scoped run; examples show command shape, not scope.
 
 **1 — Trim.** Bloat; walls of text that should be tables; rationale dumps where a pointer would do.
 Size-budget violations on always-loaded files.
