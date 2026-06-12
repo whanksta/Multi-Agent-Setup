@@ -14,7 +14,9 @@ https://github.com/whanksta/Multi-Agent-Setup
 
 From inside your target repo, tell the agent to read this repo's README and changelog, identify what
 changed from the target repo's current setup, adopt the kit-owned files, merge only the root
-`CLAUDE.md` with existing project instructions, and run `python3 scripts/docreview.py`.
+`CLAUDE.md` with existing project instructions, and run `python3 scripts/docreview.py`. The README
+and changelog are guidance-only for adoption; do not copy them into the target repo unless the user
+explicitly asks.
 
 [Changelog](CHANGELOG.md) | [Bootstrap prompt](#bootstrap-prompt) | [Manual install](#manual-install)
 
@@ -35,6 +37,8 @@ repair the wiring.
 Whether this is a first install or an update, the agent should always start by reading `README.md`
 and [CHANGELOG.md](CHANGELOG.md) from this repo link.
 
+- **Guidance-only docs:** read this repo's `README.md` and `CHANGELOG.md`; do not overwrite the
+  target repo's own README or changelog unless the user explicitly asks.
 - **New setup:** replicate kit-owned files and symlinks exactly from this repo, then customize only
   root `CLAUDE.md` for the target project.
 - **Existing setup:** compare this repo against the target repo's current implementation, identify
@@ -42,6 +46,19 @@ and [CHANGELOG.md](CHANGELOG.md) from this repo link.
 - **Only exception:** root `CLAUDE.md` is the target project's master instruction file. Preserve and
   blend existing project instructions there instead of overwriting it.
 - **Project files:** add required `.gitignore` entries without removing unrelated project entries.
+
+### Adoption File Policy
+
+| Source path | Agent action in target repo |
+|-------------|-----------------------------|
+| `README.md`, `CHANGELOG.md` | Read for guidance and adoption notes only. Do not copy or overwrite target docs unless the user explicitly asks. |
+| `scripts/docreview.py` | Copy exactly from this repo. |
+| `.claude/skills/docreview/` | Copy exactly from this repo into the canonical skill location. |
+| `.githooks/pre-commit` | Copy exactly when installing the optional hook. |
+| `.gitignore` | Add required entries such as `CLAUDE.local.md`, `*.clobbered-*`, `__pycache__/`, and `*.py[cod]`; preserve unrelated target entries. |
+| `CLAUDE.md` | Merge/blend wiring guidance with existing project instructions; never overwrite project rules blindly. |
+| `AGENTS.md` | Create as a relative symlink to `CLAUDE.md` after consolidating existing agent rules. |
+| `.agents/skills` | Create as a folder symlink to `.claude/skills`; do not copy skill files into the mirror. |
 
 ### New Repo
 
@@ -61,7 +78,8 @@ Paste this into your agent from inside the repo you want to set up:
 ```text
 Incorporate the multi-agent instruction-file wiring from
 https://github.com/whanksta/Multi-Agent-Setup into THIS repo. Treat that repo link as the only
-source of truth: read README.md and CHANGELOG.md before editing.
+source of truth: read README.md and CHANGELOG.md before editing. Use those two files as guidance
+only; do not copy or overwrite this repo's own README.md or CHANGELOG.md unless I explicitly ask.
 
 First, pre-consolidate: read all existing instruction files such as AGENTS.md, .cursorrules,
 GEMINI.md, and scattered rule docs. Fold their active rules into one canonical CLAUDE.md,
@@ -84,7 +102,8 @@ Paste this into your agent from inside a repo that already uses MultiAgentSetup:
 Pull the latest guidance from https://github.com/whanksta/Multi-Agent-Setup and update THIS repo's
 multi-agent setup. Treat the repo link as the only source of truth: read README.md and CHANGELOG.md,
 compare the target repo's current implementation against the source repo, and identify the changes
-to adopt.
+to adopt. Use README.md and CHANGELOG.md as guidance only; do not copy or overwrite this repo's own
+README.md or CHANGELOG.md unless I explicitly ask.
 
 Replicate kit-owned files exactly: scripts/docreview.py, .claude/skills/docreview/,
 .githooks/pre-commit, AGENTS.md as a symlink to CLAUDE.md, and .agents/skills as a symlink to
@@ -105,7 +124,7 @@ docreview: PASS. Summarize what changed and any adoption notes from CHANGELOG.md
 | `.agents/skills` | Folder symlink to `.claude/skills`. |
 | `scripts/docreview.py` | Verifies and repairs wiring; checks instruction-file size budgets. |
 | `.claude/skills/docreview/` | Agent skill for wiring checks and doc-doctrine review. |
-| `CHANGELOG.md` | Update notes for agents adopting changes from this repo link. |
+| `CHANGELOG.md` | Source-side update notes for agents to read before adopting changes. |
 
 ## How It Works
 
@@ -225,9 +244,11 @@ Use this longer prompt only when the target agent cannot inspect this repo direc
 Set up this repo for multi-agent instruction files, with Claude Code as the primary agent and
 CLAUDE.md as the single canonical rulebook the other agents point at.
 
-First read README.md and CHANGELOG.md from https://github.com/whanksta/Multi-Agent-Setup. If this is
-a new setup, replicate kit-owned files exactly. If this repo already has MultiAgentSetup, compare
-the current implementation against the source repo and identify the changelog changes to adopt.
+First read README.md and CHANGELOG.md from https://github.com/whanksta/Multi-Agent-Setup. These are
+guidance-only source docs; do not copy or overwrite this repo's own README.md or CHANGELOG.md unless
+the user explicitly asks. If this is a new setup, replicate kit-owned files exactly. If this repo
+already has MultiAgentSetup, compare the current implementation against the source repo and identify
+the changelog changes to adopt.
 
 Do all of the following:
 

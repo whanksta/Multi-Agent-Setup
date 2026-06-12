@@ -31,6 +31,10 @@ Historical entries were reconstructed from Git history through `7b20a84`.
   mechanical check.
 - Broadened full `docreview` scope to every repo-owned Markdown doc exactly once while excluding
   symlink mirrors such as `AGENTS.md` and `.agents/skills`.
+- Clarified that source `README.md` and `CHANGELOG.md` are guidance-only during adoption; agents
+  should read them but not copy or overwrite target repo docs unless explicitly asked.
+- Added an adoption file policy table that tells agents which files to read only, copy exactly,
+  merge carefully, update additively, or create as symlinks.
 - Updated manual install instructions so existing repos never overwrite root `CLAUDE.md`.
 - Documented that `docreview.py` requires Python 3.7+ while keeping the modern source style.
 - Clarified the one merge/blend exception: root `CLAUDE.md` is the target repo's master instruction
