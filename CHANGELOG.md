@@ -26,6 +26,11 @@ Historical entries were reconstructed from Git history through `7b20a84`.
   canonical folder symlink.
 - Updated the pre-commit hook to fail if `docreview.py` repairs the worktree, so repairs can be
   staged and committed explicitly.
+- Clarified the `docreview` skill workflow: run `python3 scripts/docreview.py` first to normalize
+  wiring, choose either full or scoped doctrine review, then run the Python script again as the final
+  mechanical check.
+- Broadened full `docreview` scope to every repo-owned Markdown doc exactly once while excluding
+  symlink mirrors such as `AGENTS.md` and `.agents/skills`.
 - Updated manual install instructions so existing repos never overwrite root `CLAUDE.md`.
 - Documented that `docreview.py` requires Python 3.7+ while keeping the modern source style.
 - Clarified the one merge/blend exception: root `CLAUDE.md` is the target repo's master instruction
