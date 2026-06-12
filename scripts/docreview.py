@@ -162,12 +162,20 @@ def check_agents_symlink(
     return 1
 
 
-def has_real_skill_dirs(mirror: Path) -> bool:
-    """Return whether a mirror dir contains real copied skill directories."""
-    if not mirror.is_dir():
-        return False
+def path_has_contents(path: Path) -> bool:
+    """Return whether a real path has content worth backing up."""
+    if path.is_dir():
+        return any(path.iterdir())
 
-    return any(entry.is_dir() and not entry.is_symlink() for entry in mirror.iterdir())
+    return os.path.lexists(path)
+
+
+def backup_existing_path(path: Path, backup: Path) -> None:
+    """Back up a real file or directory before replacing it with a symlink."""
+    if path.is_dir() and not path.is_symlink():
+        shutil.copytree(path, backup, symlinks=True)
+    else:
+        shutil.copy2(path, backup)
 
 
 def check_skill_mirror(root_dir: Path, timestamp: str) -> int:
@@ -200,11 +208,11 @@ def check_skill_mirror(root_dir: Path, timestamp: str) -> int:
         return status
 
     if mirror.exists():
-        if has_real_skill_dirs(mirror):
+        if path_has_contents(mirror):
             backup = mirror.parent / f"skills.clobbered-{timestamp}"
-            shutil.copytree(mirror, backup)
+            backup_existing_path(mirror, backup)
             print(
-                f"  WARN  {rel_mirror} held real skill copies - backed up to "
+                f"  WARN  {rel_mirror} held real content - backed up to "
                 f"{relative(backup, root_dir)} before replacing with symlink."
             )
         else:

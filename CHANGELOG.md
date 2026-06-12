@@ -22,6 +22,12 @@ Historical entries were reconstructed from Git history through `7b20a84`.
   pathlib-first helpers, typed functions, shared ignore-directory constants, and wrapped diagnostics
   while preserving the same wiring and budget checks.
 - Added Python bytecode cache ignores to `.gitignore` for `__pycache__/` and `*.py[cod]`.
+- Made `.agents/skills` repair back up any real non-empty content before replacing it with the
+  canonical folder symlink.
+- Updated the pre-commit hook to fail if `docreview.py` repairs the worktree, so repairs can be
+  staged and committed explicitly.
+- Updated manual install instructions so existing repos never overwrite root `CLAUDE.md`.
+- Documented that `docreview.py` requires Python 3.7+ while keeping the modern source style.
 - Clarified the one merge/blend exception: root `CLAUDE.md` is the target repo's master instruction
   file, so existing project-specific instructions must be preserved and blended instead of
   overwritten.
