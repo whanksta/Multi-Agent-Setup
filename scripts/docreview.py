@@ -3,11 +3,14 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import shutil
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 
 # Topology this enforces:
 #   CLAUDE.md = real canonical file (all shared rules)
@@ -34,6 +37,14 @@ IGNORED_DIRS = {
     "node_modules",
     "venv",
 }
+
+
+class InstructionFileGap(NamedTuple):
+    """Instruction files missing from one directory in a report scope."""
+
+    relative_dir: Path
+    missing_claude: bool
+    missing_agents: bool
 
 
 def relative(path: Path, root_dir: Path) -> Path:
@@ -63,6 +74,24 @@ def iter_scoped_claude_files(root_dir: Path):
 
         if "CLAUDE.md" in filenames:
             yield path / "CLAUDE.md"
+
+
+def iter_instruction_file_gaps(root_dir: Path):
+    """Yield directories in scope that lack CLAUDE.md and/or AGENTS.md."""
+    for dirpath, dirnames, _filenames in os.walk(root_dir):
+        dirnames[:] = sorted(
+            name
+            for name in dirnames
+            if name not in IGNORED_DIRS and not (Path(dirpath) / name).is_symlink()
+        )
+
+        path = Path(dirpath)
+        missing_claude = not os.path.lexists(path / "CLAUDE.md")
+        missing_agents = not os.path.lexists(path / "AGENTS.md")
+
+        if missing_claude or missing_agents:
+            relative_dir = Path(".") if path == root_dir else relative(path, root_dir)
+            yield InstructionFileGap(relative_dir, missing_claude, missing_agents)
 
 
 def path_contents_match(path1: Path, path2: Path) -> bool:
@@ -331,9 +360,105 @@ def audit_budgets(root_dir: Path) -> int:
     return status
 
 
+def repo_root_from_script() -> Path:
+    """Return the repo root that owns this script."""
+    return Path(__file__).resolve().parent.parent
+
+
+def git_worktree_root(cwd: Path) -> Path:
+    """Return the Git worktree root for cwd."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=cwd,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"{cwd} is not inside a Git worktree")
+
+    return Path(result.stdout.strip()).resolve()
+
+
+def resolve_scope_root(scope: str, custom_path: str | None, cwd: Path) -> Path:
+    """Resolve a user-selected scope root."""
+    if scope in {"repo", "whole-repo"}:
+        return repo_root_from_script()
+
+    if scope in {"worktree", "work-tree"}:
+        return git_worktree_root(cwd)
+
+    if scope == "path":
+        if not custom_path:
+            raise ValueError("--scope path requires --path")
+        return Path(custom_path).expanduser().resolve()
+
+    raise ValueError(f"Unsupported scope: {scope}")
+
+
+def print_missing_instruction_report(root_dir: Path) -> int:
+    """Print directories missing CLAUDE.md and/or AGENTS.md."""
+    print(f"docreview: reporting instruction-file coverage in {root_dir}")
+
+    gaps = list(iter_instruction_file_gaps(root_dir))
+    if not gaps:
+        print("  ok    every directory in scope has CLAUDE.md and AGENTS.md")
+        return 0
+
+    for gap in gaps:
+        missing = []
+        if gap.missing_claude:
+            missing.append("CLAUDE.md")
+        if gap.missing_agents:
+            missing.append("AGENTS.md")
+        print(f"  info  {gap.relative_dir.as_posix()} missing {', '.join(missing)}")
+
+    print(
+        "  note  Missing CLAUDE.md entries are prompts to consider scoped files "
+        "only when folder-specific rules warrant them."
+    )
+    return 0
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser."""
+    parser = argparse.ArgumentParser(
+        description="Verify/repair agent instruction wiring or report missing scoped files."
+    )
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=("check", "missing"),
+        default="check",
+        help="check repairs wiring and budgets; missing reports directories without both files",
+    )
+    parser.add_argument(
+        "--scope",
+        choices=("repo", "whole-repo", "worktree", "work-tree", "path"),
+        default="worktree",
+        help="scope root for the selected command; defaults to the current Git worktree",
+    )
+    parser.add_argument(
+        "--path",
+        help="custom scope root when --scope path is used",
+    )
+    return parser
+
+
 def main() -> None:
-    """Run docreview from the repo root."""
-    root_dir = Path(__file__).resolve().parent.parent
+    """Run docreview for the selected command and scope."""
+    parser = build_arg_parser()
+    args = parser.parse_args()
+
+    try:
+        root_dir = resolve_scope_root(args.scope, args.path, Path.cwd())
+    except ValueError as exc:
+        print(f"docreview: FAIL - {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    if args.command == "missing":
+        sys.exit(print_missing_instruction_report(root_dir))
+
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
     print(f"docreview: checking agent instruction files in {root_dir}")

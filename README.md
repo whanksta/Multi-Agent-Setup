@@ -1,24 +1,26 @@
 # MultiAgentSetup
 
-One canonical instruction system for Claude Code, Codex, and Antigravity.
+Two things every multi-agent repo needs, wired once: **one canonical instruction system** that
+Claude Code, Codex, and Antigravity all read, and **`codebase-audit`**, a deterministic structural-
+health signal your agents run before touching risky code.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 [![Use this template](https://img.shields.io/badge/Use%20this%20template-2ea44f?logo=github&logoColor=white)](https://github.com/whanksta/Multi-Agent-Setup/generate)
 [![works with](https://img.shields.io/badge/works%20with-Claude%20Code,%20Codex,%20Antigravity-blue)](#compatibility)
 
-**Start here:** copy this repo link into your coding agent and let it handle everything:
+**Start here:** from inside your target repo, paste this link into your coding agent and tell it to
+set up (or update) the kit:
 
 ```text
 https://github.com/whanksta/Multi-Agent-Setup
 ```
 
-From inside your target repo, tell the agent to read this repo's README and changelog, identify what
-changed from the target repo's current setup, adopt the kit-owned files, merge only the root
-`CLAUDE.md` with existing project instructions, and run `python3 scripts/docreview.py`. The README
-and changelog are guidance-only for adoption; do not copy them into the target repo unless the user
-explicitly asks.
+The [single adoption prompt](#existing-or-installed-repo-one-prompt) below tells the agent exactly
+what to do — **clone this repo for the exact files**, replicate the kit-owned ones, merge only root
+`CLAUDE.md`, and run `python3 scripts/docreview.py`. The README and changelog are guidance for
+adoption only; the agent reads them but does not copy them into your repo unless you ask.
 
-[Changelog](CHANGELOG.md) | [Bootstrap prompt](#bootstrap-prompt) | [Manual install](#manual-install)
+[Changelog](CHANGELOG.md) | [Quick start](#quick-start) | [Manual install](#manual-install)
 
 ## Why This Exists
 
@@ -30,89 +32,94 @@ MultiAgentSetup makes `CLAUDE.md` the single source of truth, exposes it to othe
 `AGENTS.md` symlink, shares skills through a folder symlink, and ships `docreview` to verify and
 repair the wiring.
 
+## Two Pillars
+
+This kit ships two core capabilities:
+
+1. **Instruction-file wiring** — `CLAUDE.md` is canonical; `AGENTS.md` and `.agents/skills` are
+   symlinks so every agent reads the same bytes; `docreview` verifies and repairs that wiring and
+   audits the docs for drift.
+2. **`codebase-audit`** — a deterministic, repo-agnostic structural-health signal. It decomposes
+   size and layers in the git-temporal signals (churn, hotspot, temporal coupling) that actually
+   predict where defects accrue, so an agent gets the wide quantitative picture before it judges
+   what to refactor.
+
+`codebase-audit` is **signal, not a gate** by design: it emits ranked evidence, never a pass/fail
+verdict, so it informs judgment instead of blocking work. That is a feature — the agent stays in
+control — not a disclaimer.
+
 ## Quick Start
 
-### Adoption Protocol
+Two ways in. For a brand-new repo, use the GitHub template button — no agent needed. For an existing
+project (or to update an installed one), paste the single adoption prompt below; it detects which
+situation you're in and adapts.
 
-Whether this is a first install or an update, the agent should always start by reading `README.md`
-and [CHANGELOG.md](CHANGELOG.md) from this repo link.
+### New repo (template button)
 
-- **Guidance-only docs:** read this repo's `README.md` and `CHANGELOG.md`; do not overwrite the
-  target repo's own README or changelog unless the user explicitly asks.
-- **New setup:** replicate kit-owned files and symlinks exactly from this repo, then customize only
-  root `CLAUDE.md` for the target project.
-- **Existing setup:** compare this repo against the target repo's current implementation, identify
-  changes from the changelog, and replicate kit-owned files exactly.
-- **Only exception:** root `CLAUDE.md` is the target project's master instruction file. Preserve and
-  blend existing project instructions there instead of overwriting it.
-- **Project files:** add required `.gitignore` entries without removing unrelated project entries.
+Click **[Use this template](https://github.com/whanksta/Multi-Agent-Setup/generate)**, edit
+`CLAUDE.md` with your project's real rules, then run `python3 scripts/docreview.py` and expect
+`docreview: PASS`.
+
+### Existing or installed repo (one prompt)
+
+Paste this into your agent from inside the repo you want to set up or update. The same prompt covers
+a fresh adoption, a repo that already has other agent files, and an update of an existing install:
+
+```text
+Set up (or update) this repo with the MultiAgentSetup kit from
+https://github.com/whanksta/Multi-Agent-Setup.
+
+1. GET THE EXACT FILES. Clone the source so you have its real bytes — do not retype scripts from a
+   web page:
+       git clone --depth 1 https://github.com/whanksta/Multi-Agent-Setup /tmp/mas
+   Read /tmp/mas/README.md and /tmp/mas/CHANGELOG.md for guidance only. Never copy the source's
+   README.md or CHANGELOG.md into my repo unless I explicitly ask.
+
+2. DETECT THE SITUATION:
+   - My repo already has scripts/docreview.py  ->  UPDATE: read .claude/.mas-version, then apply
+     only the CHANGELOG batches dated newer than it.
+   - My repo has other instruction files (a real AGENTS.md, .cursorrules, GEMINI.md, scattered rule
+     docs)  ->  PRE-CONSOLIDATE: fold their active rules into one canonical CLAUDE.md, dedupe, and
+     preserve my conventions; then remove the redundant copies.
+   - Neither  ->  FRESH install.
+
+3. REPLICATE KIT-OWNED FILES EXACTLY from /tmp/mas (see the Adoption File Policy table for the full
+   list + per-file action): scripts/docreview.py, .claude/skills/docreview/,
+   .claude/skills/codebase-audit/, .githooks/pre-commit, and VERSION. Create AGENTS.md as a relative
+   symlink to CLAUDE.md and .agents/skills as a folder symlink to .claude/skills. Add the needed
+   .gitignore entries without removing unrelated ones.
+
+4. MERGE ONLY ROOT CLAUDE.md — it is my repo's master instruction file. Blend the kit's wiring
+   sections with my existing project rules; never overwrite them.
+
+5. STAMP THE VERSION: copy /tmp/mas/VERSION into my repo as .claude/.mas-version so the next update
+   knows its baseline.
+
+6. Run python3 scripts/docreview.py, confirm it prints docreview: PASS, then summarize what changed
+   and any adoption notes from CHANGELOG.md.
+```
+
+No `git`? Fetch each kit-owned file from
+`https://raw.githubusercontent.com/whanksta/Multi-Agent-Setup/main/<path>` (e.g.
+`.../main/scripts/docreview.py`), then follow steps 2–6 — or wire it yourself with
+[Manual install](#manual-install).
 
 ### Adoption File Policy
+
+The agent's per-file contract. "Copy exactly" means byte-for-byte from the clone in step 1.
 
 | Source path | Agent action in target repo |
 |-------------|-----------------------------|
 | `README.md`, `CHANGELOG.md` | Read for guidance and adoption notes only. Do not copy or overwrite target docs unless the user explicitly asks. |
-| `scripts/docreview.py` | Copy exactly from this repo. |
-| `.claude/skills/docreview/` | Copy exactly from this repo into the canonical skill location. |
-| `.githooks/pre-commit` | Copy exactly when installing the optional hook. |
+| `scripts/docreview.py` | Copy exactly from the clone. |
+| `.claude/skills/docreview/` | Copy exactly into the canonical skill location. |
+| `.claude/skills/codebase-audit/` | Copy exactly — it is a core part of the kit, not an optional add-on. |
+| `.githooks/pre-commit` | Copy exactly (enable with `git config core.hooksPath .githooks`). |
+| `VERSION` | Copy its value into the target as `.claude/.mas-version` to record the adopted version. |
 | `.gitignore` | Add required entries such as `CLAUDE.local.md`, `*.clobbered-*`, `__pycache__/`, and `*.py[cod]`; preserve unrelated target entries. |
 | `CLAUDE.md` | Merge/blend wiring guidance with existing project instructions; never overwrite project rules blindly. |
 | `AGENTS.md` | Create as a relative symlink to `CLAUDE.md` after consolidating existing agent rules. |
 | `.agents/skills` | Create as a folder symlink to `.claude/skills`; do not copy skill files into the mirror. |
-
-### New Repo
-
-Click **[Use this template](https://github.com/whanksta/Multi-Agent-Setup/generate)**, then edit
-`CLAUDE.md` with your project's real rules and run:
-
-```bash
-python3 scripts/docreview.py
-```
-
-Expect `docreview: PASS`.
-
-### Existing Repo
-
-Paste this into your agent from inside the repo you want to set up:
-
-```text
-Incorporate the multi-agent instruction-file wiring from
-https://github.com/whanksta/Multi-Agent-Setup into THIS repo. Treat that repo link as the only
-source of truth: read README.md and CHANGELOG.md before editing. Use those two files as guidance
-only; do not copy or overwrite this repo's own README.md or CHANGELOG.md unless I explicitly ask.
-
-First, pre-consolidate: read all existing instruction files such as AGENTS.md, .cursorrules,
-GEMINI.md, and scattered rule docs. Fold their active rules into one canonical CLAUDE.md,
-deduplicating and preserving my project's conventions. CLAUDE.md is the only file that should blend
-the kit with existing project-specific instructions.
-
-Then wire one source of truth: replicate kit-owned files exactly from Multi-Agent-Setup, including
-scripts/docreview.py, .claude/skills/docreview/, .githooks/pre-commit, AGENTS.md as a symlink to
-CLAUDE.md, and .agents/skills as a folder symlink to .claude/skills. Add the needed .gitignore
-entries without removing unrelated project entries.
-
-Finally, run python3 scripts/docreview.py and confirm it prints docreview: PASS.
-```
-
-### Existing Install
-
-Paste this into your agent from inside a repo that already uses MultiAgentSetup:
-
-```text
-Pull the latest guidance from https://github.com/whanksta/Multi-Agent-Setup and update THIS repo's
-multi-agent setup. Treat the repo link as the only source of truth: read README.md and CHANGELOG.md,
-compare the target repo's current implementation against the source repo, and identify the changes
-to adopt. Use README.md and CHANGELOG.md as guidance only; do not copy or overwrite this repo's own
-README.md or CHANGELOG.md unless I explicitly ask.
-
-Replicate kit-owned files exactly: scripts/docreview.py, .claude/skills/docreview/,
-.githooks/pre-commit, AGENTS.md as a symlink to CLAUDE.md, and .agents/skills as a symlink to
-.claude/skills. Add required .gitignore entries without removing unrelated project entries.
-
-Only merge/blend root CLAUDE.md, because it is the target repo's master instruction file and may
-already contain project-specific rules. Then run python3 scripts/docreview.py and confirm it prints
-docreview: PASS. Summarize what changed and any adoption notes from CHANGELOG.md.
-```
 
 ## What You Get
 
@@ -124,6 +131,8 @@ docreview: PASS. Summarize what changed and any adoption notes from CHANGELOG.md
 | `.agents/skills` | Folder symlink to `.claude/skills`. |
 | `scripts/docreview.py` | Verifies and repairs wiring; checks instruction-file size budgets. |
 | `.claude/skills/docreview/` | Agent skill for wiring checks and doc-doctrine review. |
+| `.claude/skills/codebase-audit/` | Core agent skill + script for structural hotspot/churn signals (advisory, not a gate). |
+| `VERSION` | Kit version string; copied into an adopting repo as `.claude/.mas-version`. |
 | `CHANGELOG.md` | Source-side update notes for agents to read before adopting changes. |
 
 ## How It Works
@@ -154,15 +163,18 @@ see them through `.agents/skills`.
 Most users should paste the repo link into an agent. If you want to wire the files yourself:
 
 ```bash
-SRC=path/to/Multi-Agent-Setup
+git clone --depth 1 https://github.com/whanksta/Multi-Agent-Setup /tmp/mas
+SRC=/tmp/mas
 DST=.
 
 mkdir -p "$DST"/{scripts,.claude/skills}
 cp "$SRC"/scripts/docreview.py "$DST"/scripts/
 cp -r "$SRC"/.claude/skills/docreview "$DST"/.claude/skills/
+cp -r "$SRC"/.claude/skills/codebase-audit "$DST"/.claude/skills/
 mkdir -p "$DST"/.githooks
 cp "$SRC"/.githooks/pre-commit "$DST"/.githooks/
 cat "$SRC"/.gitignore >> "$DST"/.gitignore
+cp "$SRC"/VERSION "$DST"/.claude/.mas-version   # record the adopted version
 
 if [ -e "$DST"/CLAUDE.md ]; then
   echo "CLAUDE.md exists; merge the wiring sections from $SRC/CLAUDE.md manually."
@@ -171,7 +183,7 @@ else
 fi
 
 ln -snf CLAUDE.md "$DST"/AGENTS.md
-python3 "$DST"/scripts/docreview.py
+python3 "$DST"/scripts/docreview.py   # also creates .agents/skills -> ../.claude/skills
 ```
 
 For new repos, replace the template conventions in `CLAUDE.md` with your project's real rules. For
@@ -211,7 +223,42 @@ python3 scripts/docreview.py
 If an agent clobbers a symlink with a real file, `docreview` backs up the divergent content to a
 `*.clobbered-<timestamp>` file before restoring the symlink.
 
+To inventory folders that do not have scoped instruction files, use the report-only `missing`
+command. It does not create files or repair symlinks:
+
+```bash
+python3 scripts/docreview.py missing
+python3 scripts/docreview.py missing --scope repo
+python3 scripts/docreview.py missing --scope path --path path/to/subtree
+```
+
+The default scope is the current Git worktree. Use `--scope repo` / `--scope whole-repo` only when
+you explicitly want the repo that owns `scripts/docreview.py`. Missing scoped files are
+informational prompts: add a scoped `CLAUDE.md` only when that folder has a real folder-specific
+convention or foot-gun, then run the normal wiring check.
+
 Requires Python 3.7+.
+
+## `codebase-audit`
+
+`codebase-audit` emits a ranked health digest for source files: decomposed size, biggest symbol,
+biggest function, nesting, density, churn, hotspot, and temporal coupling. It is a thinking aid for
+agents, not a linter and not a gate.
+
+Run a full audit from any wired repo:
+
+```bash
+python3 .claude/skills/codebase-audit/scripts/audit.py
+```
+
+The pre-commit hook runs `audit.py --staged` after `docreview` passes. That staged check is
+advisory and must always exit zero; do not add thresholds that block commits.
+
+To verify the bundled script in this source repo, run the stdlib test suite:
+
+```bash
+python3 -m unittest discover -s tests
+```
 
 ## FAQ
 
@@ -233,54 +280,11 @@ the code. Keep must-hold-everywhere rules in the root `CLAUDE.md`.
 Yes, as long as the repo is pushed to a Git remote. User-profile config such as `~/.claude/` is not
 the durable unit; the repo is.
 
-## Bootstrap Prompt
+### How does an update know what changed?
 
-Use this longer prompt only when the target agent cannot inspect this repo directly.
-
-<details>
-<summary>Full fallback prompt</summary>
-
-```text
-Set up this repo for multi-agent instruction files, with Claude Code as the primary agent and
-CLAUDE.md as the single canonical rulebook the other agents point at.
-
-First read README.md and CHANGELOG.md from https://github.com/whanksta/Multi-Agent-Setup. These are
-guidance-only source docs; do not copy or overwrite this repo's own README.md or CHANGELOG.md unless
-the user explicitly asks. If this is a new setup, replicate kit-owned files exactly. If this repo
-already has MultiAgentSetup, compare the current implementation against the source repo and identify
-the changelog changes to adopt.
-
-Do all of the following:
-
-1. CLAUDE.md: keep it if present, preserving all existing rules and adding the wiring around them.
-   If it does not exist, create it with a short project description, a "Canonical instructions file"
-   section, scoped CLAUDE.md guidance, and the project's real conventions. This is the only file
-   where source-repo content should be blended with existing project-specific instructions.
-
-2. Pre-consolidate first: read all existing instruction files, including AGENTS.md, .cursorrules,
-   GEMINI.md, and scattered rule docs. Fold all active rules into CLAUDE.md, deduplicate them, and
-   preserve the project's conventions. Once consolidated, remove redundant copies so CLAUDE.md is
-   the single source of truth.
-
-3. AGENTS.md: delete any existing file after consolidation, then create a relative symlink pointing
-   to CLAUDE.md.
-
-4. scripts/docreview.py: replicate the source repo's script exactly. It enforces this topology:
-   CLAUDE.md is real and canonical; AGENTS.md is a symlink to CLAUDE.md; .agents/skills is a folder
-   symlink to .claude/skills; circular @./AGENTS.md imports are rejected; clobbered divergent files
-   are backed up as *.clobbered-<timestamp>.
-
-5. .claude/skills/docreview/: replicate the source repo's canonical docreview skill exactly. Do not
-   copy it into other agents' directories; .agents/skills must be a symlink to .claude/skills.
-
-6. .githooks/pre-commit: replicate the source repo's hook exactly. .gitignore: add
-   CLAUDE.local.md and *.clobbered-* without removing unrelated project entries.
-
-7. Run python3 scripts/docreview.py, confirm docreview: PASS, and remind me to edit shared rules and
-   skills only in their canonical homes: CLAUDE.md and .claude/skills/.
-```
-
-</details>
+On install the agent stamps `.claude/.mas-version` with the kit's `VERSION`. On the next update it
+reads that marker and applies only the `CHANGELOG.md` batches dated newer than it, then re-stamps —
+so updates are incremental and you can see exactly which version a repo is on.
 
 ## License
 

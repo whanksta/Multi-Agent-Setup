@@ -8,6 +8,43 @@ batches available once committed.
 
 Historical entries were reconstructed from Git history through `7b20a84`.
 
+## 2026-06-15
+
+### Added
+
+- Added `python3 scripts/docreview.py missing` to report folders missing `CLAUDE.md` and/or
+  `AGENTS.md` without repairing or requiring scoped files.
+- Added scope selection for the missing-file report: default current Git worktree, explicit source
+  repo via `--scope repo`, or custom path via `--scope path --path ...`.
+- Added `.claude/skills/codebase-audit/`, a repo-agnostic structural audit skill and stdlib Python
+  script for size, churn, hotspot, and temporal-coupling signals. This explicitly expands the kit
+  beyond instruction wiring with an advisory code-audit tool.
+- Added stdlib `unittest` coverage for `codebase-audit` JSON output, generated-file skipping,
+  staged advisory mode, and temporal coupling.
+- Updated `.githooks/pre-commit` to run `codebase-audit --staged` as a non-blocking advisory after
+  `docreview` passes.
+- Updated the `docreview` skill and README with missing-file inventory guidance.
+- Added a `VERSION` file and an adopted-version marker (`.claude/.mas-version`) so the update flow
+  has a concrete baseline to diff the changelog against.
+
+### Changed
+
+- Rewrote the README adoption flow around an explicit **clone-first** step
+  (`git clone --depth 1 … /tmp/mas`) so agents replicate exact bytes instead of retyping scripts
+  from a web page, with a `raw.githubusercontent.com` fallback for agents that cannot run `git`.
+- Collapsed the four overlapping paste-prompts (Start here / Existing Repo / Existing Install /
+  Bootstrap) into a single decision-routed adoption prompt that detects fresh vs. has-other-files
+  vs. update and adapts.
+- Promoted the Adoption File Policy table directly under the prompt and reframed `codebase-audit` as
+  a core pillar (with a "Two Pillars" section) rather than an advisory afterthought.
+
+### Adoption Notes
+
+- Replace `scripts/docreview.py`, `.claude/skills/docreview/`, `.claude/skills/codebase-audit/`,
+  and `.githooks/pre-commit` from this source repo to adopt the new missing-file report and staged
+  structural-audit advisory.
+- Copy `VERSION` into the target as `.claude/.mas-version` so later updates know the baseline.
+
 ## 2026-06-12
 
 ### Changed
