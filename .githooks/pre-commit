@@ -12,3 +12,9 @@ if [ "$before" != "$after" ]; then
   git status --short
   exit 1
 fi
+
+# --- Non-blocking structural heads-up on the staged changes ---------------------
+# Runs only after the docreview gate above passes. NEVER add an exit/threshold
+# here: codebase-audit is signal, not a gate (see its SKILL.md). It always
+# exits 0 so it can flag a touched outlier without ever stopping a commit.
+python3 .claude/skills/codebase-audit/scripts/audit.py --staged 2>/dev/null || true

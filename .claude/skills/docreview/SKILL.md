@@ -1,13 +1,15 @@
 ---
 name: docreview
-description: Verifies and repairs the multi-agent instruction-file wiring (CLAUDE.md canonical, AGENTS.md symlink → CLAUDE.md) AND audits the documentation surface against doc doctrine — size budgets, scope placement, staleness/drift, broken links, doctrine-vs-reality, and CLAUDE.md / SKILL.md authoring quality. Use to check or fix AGENTS.md/CLAUDE.md consistency, after any agent may have edited an instruction file, when the AGENTS.md symlink may have been clobbered, when a CLAUDE.md is bloated/stale/duplicative, or before committing changes to instruction files or skills. Triggers - /docreview, "check doc wiring", "audit docs", "review CLAUDE.md", "doc drift", "is this skill well written".
+description: Verifies and repairs multi-agent instruction-file wiring (CLAUDE.md canonical, AGENTS.md symlink → CLAUDE.md), reports folders missing scoped CLAUDE.md/AGENTS.md files, and audits docs against doctrine. Use to check or fix AGENTS.md/CLAUDE.md consistency, find missing scoped instruction files, after any agent edited instruction files, when symlinks are clobbered, when docs look stale/bloated, or before committing instruction files or skills. Triggers - /docreview, "check doc wiring", "audit docs", "review CLAUDE.md", "doc drift".
 ---
 
 # docreview
 
-Two jobs, run in order. **Part 1 (wiring)** is mechanical and always runs first; after any doctrine
-fixes, run it again as the final check. **Part 2 (doctrine)** is a judgment audit — run it on
-request, before committing instruction-file changes, or whenever a doc looks bloated/stale.
+For wiring or doctrine review, run two jobs in order. **Part 1 (wiring)** is mechanical and runs
+first; after any doctrine fixes, run it again as the final check. **Part 2 (doctrine)** is a
+judgment audit — run it on request, before committing instruction-file changes, or whenever a doc
+looks bloated/stale. If the user only asks for folders missing scoped instruction files, use the
+optional missing-file inventory command instead.
 
 Choose one doctrine mode after Part 1:
 
@@ -50,6 +52,30 @@ mirror of `.claude/skills`.** If the user only asks for "just the wiring," run P
 > (Claude natively; Codex & Antigravity through the `.agents/skills` symlink).
 
 If the user only asked to "check the wiring," stop here.
+
+---
+
+## Optional — Missing scoped-file inventory
+
+Use this when the user asks which folders do not have `CLAUDE.md` and/or `AGENTS.md`. This is
+report-only; missing scoped files are not automatically defects. Create a scoped `CLAUDE.md` only
+when the folder has a real convention or foot-gun, then run the normal wiring check to create or
+repair that folder's `AGENTS.md` symlink.
+
+Choose the smallest useful scope:
+
+```bash
+python3 scripts/docreview.py missing
+python3 scripts/docreview.py missing --scope repo
+python3 scripts/docreview.py missing --scope path --path path/to/subtree
+```
+
+- `missing` defaults to the current Git worktree root.
+- `--scope repo` / `--scope whole-repo` reports the repo that owns `scripts/docreview.py`; use this
+  only when the user asks for source-repo-wide coverage.
+- `--scope path --path ...` reports an arbitrary custom subtree without requiring root wiring there.
+The output is a prompt to consider whether a scoped `CLAUDE.md` is warranted, not a mandate to add
+one.
 
 ---
 
@@ -140,13 +166,15 @@ to a single agent so the audit stays reproducible.
 
 ## Self-check before reporting
 
-- Ran Part 1 and confirmed `PASS` (or surfaced the clobbered backup)?
+- For wiring/doctrine requests, ran Part 1 and confirmed `PASS` (or surfaced the clobbered backup)?
 - Stated `full doc review` or `scoped doc review` and listed the target set?
 - Printed the inventory + per-file verdict before auditing?
 - Audited every in-scope Markdown doc exactly once, excluding `AGENTS.md` and `.agents/skills`?
 - Ran every axis with its verify command — not from memory?
 - Every finding cites `file:line`, names its axis, carries a fix-class, has a severity?
 - Verified every count/path/claim I flagged (or relied on) against reality?
+- If asked for missing scoped-file inventory, ran `python3 scripts/docreview.py missing` with the
+  correct scope and treated the output as informational unless scoped doctrine is justified?
 - Did NOT flag `AGENTS.md` as a separate file, and did NOT propose moving the script into the skill?
 - Blockers separated from nits; nothing inflated?
 
