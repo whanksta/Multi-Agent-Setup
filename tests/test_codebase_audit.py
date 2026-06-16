@@ -50,6 +50,19 @@ class CodebaseAuditScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         return result
 
+    def test_json_output_works_without_git_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            write_file(repo, "src/app.py", "def app():\n    return 1\n")
+
+            result = self.run_audit(repo, "--json")
+
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["meta"]["commits"], 0)
+        self.assertEqual(payload["meta"]["languages"], {"python": 1})
+        self.assertEqual([file["path"] for file in payload["files"]], ["src/app.py"])
+        self.assertEqual(payload["coupling"], [])
+
     def test_json_output_reports_python_metrics_and_skips_generated_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

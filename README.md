@@ -99,10 +99,15 @@ https://github.com/whanksta/Multi-Agent-Setup.
    and any adoption notes from CHANGELOG.md.
 ```
 
-No `git`? Fetch each kit-owned file from
-`https://raw.githubusercontent.com/whanksta/Multi-Agent-Setup/main/<path>` (e.g.
-`.../main/scripts/docreview.py`), then follow steps 2–6 — or wire it yourself with
-[Manual install](#manual-install).
+No `git`? Download the source zip instead, then use it as `SRC` anywhere the prompt says `/tmp/mas`:
+
+```bash
+curl -L https://github.com/whanksta/Multi-Agent-Setup/archive/refs/heads/main.zip -o /tmp/mas.zip
+python3 -m zipfile -e /tmp/mas.zip /tmp
+SRC=/tmp/Multi-Agent-Setup-main
+```
+
+Then follow steps 2–6, replacing `/tmp/mas` with `$SRC`.
 
 ### Adoption File Policy
 
@@ -229,21 +234,25 @@ command. It does not create files or repair symlinks:
 ```bash
 python3 scripts/docreview.py missing
 python3 scripts/docreview.py missing --scope repo
+python3 scripts/docreview.py missing --scope worktree
 python3 scripts/docreview.py missing --scope path --path path/to/subtree
 ```
 
-The default scope is the current Git worktree. Use `--scope repo` / `--scope whole-repo` only when
-you explicitly want the repo that owns `scripts/docreview.py`. Missing scoped files are
-informational prompts: add a scoped `CLAUDE.md` only when that folder has a real folder-specific
-convention or foot-gun, then run the normal wiring check.
+The default scope is auto: use the project that owns `scripts/docreview.py`, independent of the
+current working directory. Use `--scope worktree` when you explicitly want the current Git worktree,
+`--scope repo` / `--scope whole-repo` when you want the project that owns the script, or
+`--scope path` for an arbitrary folder. Missing scoped files are informational prompts: add a scoped
+`CLAUDE.md` only when that folder has a real folder-specific convention or foot-gun, then run the
+normal wiring check.
 
 Requires Python 3.7+.
 
 ## `codebase-audit`
 
 `codebase-audit` emits a ranked health digest for source files: decomposed size, biggest symbol,
-biggest function, nesting, density, churn, hotspot, and temporal coupling. It is a thinking aid for
-agents, not a linter and not a gate.
+biggest function, nesting, density, churn, hotspot, and temporal coupling. It uses Git history when
+available and falls back to a filesystem scan without Git. It is a thinking aid for agents, not a
+linter and not a gate.
 
 Run a full audit from any wired repo:
 

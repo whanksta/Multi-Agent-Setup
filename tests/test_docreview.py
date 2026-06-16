@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -22,6 +24,105 @@ def load_docreview_module():
 
 
 class MissingInstructionFileReportTests(unittest.TestCase):
+    def test_check_command_defaults_to_script_root_without_git(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "CLAUDE.md").write_text("root\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertEqual(result.stderr, "")
+        self.assertIn(
+            f"docreview: checking agent instruction files in {root.resolve()}",
+            result.stdout,
+        )
+        self.assertIn("docreview: PASS", result.stdout)
+
+    def test_check_command_defaults_to_script_root_from_other_git_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "CLAUDE.md").write_text("root\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            agents_path = root / "AGENTS.md"
+            agents_is_symlink = agents_path.is_symlink()
+            agents_target = os.readlink(agents_path) if agents_is_symlink else None
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertEqual(result.stderr, "")
+        self.assertIn(
+            f"docreview: checking agent instruction files in {root.resolve()}",
+            result.stdout,
+        )
+        self.assertTrue(agents_is_symlink)
+        self.assertEqual(agents_target, "CLAUDE.md")
+
+    def test_check_command_fails_when_claude_is_not_a_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "CLAUDE.md").mkdir()
+            (root / "AGENTS.md").symlink_to("CLAUDE.md")
+
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("CLAUDE.md must be a regular file", result.stdout)
+        self.assertNotIn("docreview: PASS", result.stdout)
+
+    def test_check_command_fails_when_skill_mirror_target_is_not_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "CLAUDE.md").write_text("root\n", encoding="utf-8")
+            (root / "AGENTS.md").symlink_to("CLAUDE.md")
+            (root / ".claude").mkdir()
+            (root / ".claude" / "skills").write_text("not a directory\n", encoding="utf-8")
+            (root / ".agents").mkdir()
+            (root / ".agents" / "skills").symlink_to("../.claude/skills")
+
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn(".claude/skills must be a real directory", result.stdout)
+        self.assertNotIn("docreview: PASS", result.stdout)
+
     def test_reports_every_directory_missing_instruction_files(self) -> None:
         docreview = load_docreview_module()
 
@@ -88,14 +189,39 @@ class MissingInstructionFileReportTests(unittest.TestCase):
             result.stdout,
         )
 
-    def test_missing_command_defaults_to_current_git_worktree(self) -> None:
+    def test_missing_command_defaults_to_script_root_without_git(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "src").mkdir()
+
+            result = subprocess.run(
+                [sys.executable, str(script_path), "missing"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertEqual(result.stderr, "")
+        self.assertIn(
+            f"docreview: reporting instruction-file coverage in {root.resolve()}",
+            result.stdout,
+        )
+        self.assertIn("  info  . missing CLAUDE.md, AGENTS.md", result.stdout)
+        self.assertIn("  info  src missing CLAUDE.md, AGENTS.md", result.stdout)
+
+    def test_missing_command_honors_current_git_worktree_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "subdir").mkdir()
             subprocess.run(["git", "init", "-q"], cwd=root, check=True)
 
             result = subprocess.run(
-                [sys.executable, str(SCRIPT_PATH), "missing"],
+                [sys.executable, str(SCRIPT_PATH), "missing", "--scope", "worktree"],
                 cwd=root / "subdir",
                 text=True,
                 capture_output=True,
