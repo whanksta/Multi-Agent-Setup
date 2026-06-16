@@ -145,6 +145,12 @@ def check_agents_symlink(
     if agents_path.is_symlink():
         target = os.readlink(agents_path)
         if target == "CLAUDE.md":
+            if not path_contents_match(claude_path, agents_path):
+                print(
+                    f"  FAIL  {rel_agents} points to CLAUDE.md, but the link "
+                    "does not read the same bytes as CLAUDE.md."
+                )
+                return 1
             print(f"  ok    {rel_agents} -> CLAUDE.md")
             return 0
 
@@ -216,6 +222,9 @@ def check_skill_mirror(root_dir: Path, timestamp: str) -> int:
 
     if not skill_canon.exists() or skill_canon.is_symlink():
         return status
+    if not skill_canon.is_dir():
+        print("  FAIL  .claude/skills must be a real directory before mirroring.")
+        return 1
 
     mirror.parent.mkdir(parents=True, exist_ok=True)
     rel_mirror = relative(mirror, root_dir)
@@ -223,6 +232,12 @@ def check_skill_mirror(root_dir: Path, timestamp: str) -> int:
     if mirror.is_symlink():
         target = os.readlink(mirror)
         if target == want:
+            if not mirror.is_dir():
+                print(
+                    f"  FAIL  {rel_mirror} points to {want}, but the link "
+                    "does not resolve to a directory."
+                )
+                return 1
             print(f"  ok    {rel_mirror} -> {want}")
             return status
 
@@ -269,6 +284,9 @@ def audit_wiring(root_dir: Path, timestamp: str) -> int:
 
     if root_claude.is_symlink():
         print("  FAIL  CLAUDE.md is a symlink but must be the real canonical file.")
+        status = 1
+    elif not root_claude.is_file():
+        print("  FAIL  CLAUDE.md must be a regular file.")
         status = 1
     else:
         print("  ok    CLAUDE.md is the real canonical file.")
@@ -382,6 +400,9 @@ def git_worktree_root(cwd: Path) -> Path:
 
 def resolve_scope_root(scope: str, custom_path: str | None, cwd: Path) -> Path:
     """Resolve a user-selected scope root."""
+    if scope == "auto":
+        return repo_root_from_script()
+
     if scope in {"repo", "whole-repo"}:
         return repo_root_from_script()
 
@@ -434,9 +455,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--scope",
-        choices=("repo", "whole-repo", "worktree", "work-tree", "path"),
-        default="worktree",
-        help="scope root for the selected command; defaults to the current Git worktree",
+        choices=("auto", "repo", "whole-repo", "worktree", "work-tree", "path"),
+        default="auto",
+        help=(
+            "scope root for the selected command; defaults to the project "
+            "that owns this script"
+        ),
     )
     parser.add_argument(
         "--path",

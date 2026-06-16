@@ -8,6 +8,21 @@ batches available once committed.
 
 Historical entries were reconstructed from Git history through `7b20a84`.
 
+## 2026-06-16
+
+### Fixed
+
+- Changed `scripts/docreview.py` default `--scope auto` to target the project that owns the script,
+  independent of the caller's current working directory, so copied standalone installs repair their
+  own `AGENTS.md` symlink.
+- Kept `--scope worktree` as the explicit current-Git-worktree mode.
+- Made `docreview.py` verify that `AGENTS.md` reads the same bytes as `CLAUDE.md` and that
+  `.agents/skills` resolves to a real directory, so unusable links cannot report PASS.
+- Updated README and `codebase-audit` docs to describe no-Git source zip installs and the audit
+  script's filesystem fallback without Git history.
+- Added regression coverage for invoking a copied `docreview.py` from another Git worktree and for
+  unusable symlink targets.
+
 ## 2026-06-15
 
 ### Added

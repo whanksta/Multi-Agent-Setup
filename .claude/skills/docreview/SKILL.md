@@ -67,12 +67,16 @@ Choose the smallest useful scope:
 ```bash
 python3 scripts/docreview.py missing
 python3 scripts/docreview.py missing --scope repo
+python3 scripts/docreview.py missing --scope worktree
 python3 scripts/docreview.py missing --scope path --path path/to/subtree
 ```
 
-- `missing` defaults to the current Git worktree root.
+- `missing` defaults to the project that owns `scripts/docreview.py`, independent of the current
+  working directory.
 - `--scope repo` / `--scope whole-repo` reports the repo that owns `scripts/docreview.py`; use this
   only when the user asks for source-repo-wide coverage.
+- `--scope worktree` reports the current Git worktree and fails when the current directory is not
+  inside Git.
 - `--scope path --path ...` reports an arbitrary custom subtree without requiring root wiring there.
 The output is a prompt to consider whether a scoped `CLAUDE.md` is warranted, not a mandate to add
 one.
