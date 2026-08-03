@@ -8,6 +8,48 @@ batches available once committed.
 
 Historical entries were reconstructed from Git history through `7b20a84`.
 
+## 2026-08-03
+
+### Changed
+
+- **Size budgets are now measured in estimated tokens, not non-blank lines.** Line counting was
+  blind to line width: one long table row counted as 1, so a ~6,600-token file could report PASS.
+  This kit's own `skill-axes.md` is 30 non-blank lines and ~2,100 tokens. Line counts are still
+  printed, but only as an advisory readout.
+- New budget tiers for always-loaded files: root `CLAUDE.md` <= 2,500 est. tokens, umbrella /
+  subject `CLAUDE.md` <= 1,800, scoped `CLAUDE.md` and `.claude/rules/*.md` <= 1,000. These sit
+  below the "under 200 lines" figure Anthropic publishes because 200 lines of dense markdown is
+  ~6,400 tokens, Opus 5 needs less scaffolding, and this kit pays every root token three times
+  (Claude, Codex, Antigravity).
+- `docreview.py` now distinguishes an **umbrella** `CLAUDE.md` (one that tops a subtree containing
+  further scoped files) from a leaf scoped file, and gives it the wider budget.
+- Skill-authoring axis 3 (body size budget) switched from lines/words to estimated tokens: a domain
+  skill <= ~5,000, an orchestrator <= ~10,000.
+- Added doctrine axis **C11 (obsolete safeguards)**: delete instructions written to defend against
+  weaker models — "verify your work", "double-check before responding", review severity filters,
+  and restated architecture / dependency lists / directory trees. Opus 5 self-verifies, and
+  Anthropic cut >80% of Claude Code's own system prompt for these models with no eval loss.
+
+### Added
+
+- `python3 scripts/docreview.py tokens [paths...]` reports the estimated context cost of each doc.
+  Replaces the `grep -cE` inventory one-liner in the `docreview` skill.
+- Token estimation excludes content that never reaches the context window: block-level HTML comments
+  everywhere, and YAML frontmatter everywhere except `SKILL.md` (a skill's `name`/`description` do
+  load, via the always-present skill listing). Comments inside code fences are kept. Verified
+  empirically — 7,200 chars inside `<!-- -->` cost 0 tokens vs 2,101 uncommented, and a 10,100-char
+  frontmatter block cost nothing beyond run-to-run noise.
+- `CHARS_PER_TOKEN = 2.5`, measured against this kit's own docs (range 2.42-2.58) via input-token
+  deltas between otherwise-identical `claude -p` runs. The familiar "~3.5 chars per token" predates
+  the Claude 4.7+ tokenizer and understates dense markdown by ~40%. Accuracy against measured truth:
+  within ~1-5% on full-length docs, and ~10% high on short prose-heavy samples. It errs high, which
+  is the safe direction for a gate.
+
+### Fixed
+
+- `.claude/rules/` files are now discovered recursively, matching Claude Code's documented
+  behavior. Previously a rule in `.claude/rules/backend/testing.md` was never budget-checked.
+
 ## 2026-06-16
 
 ### Fixed

@@ -37,8 +37,8 @@ mirror of `.claude/skills`.** If the user only asks for "just the wiring," run P
    It verifies + auto-repairs: `CLAUDE.md` is the real canonical file; `AGENTS.md` is a symlink →
    `CLAUDE.md` (re-links if missing/wrong); the skills mirror `.agents/skills` (Codex + Antigravity)
    is a folder symlink → `.claude/skills`; no circular `@./AGENTS.md` in `CLAUDE.md`. It also
-   audits size budgets — non-blank counts + PASS/WITHIN-SLACK/OVER verdicts for root and scoped
-   `CLAUDE.md` and `.claude/rules/` files.
+   audits size budgets — estimated token cost + PASS/WITHIN-SLACK/OVER verdicts for root, umbrella,
+   and scoped `CLAUDE.md` and `.claude/rules/` files.
 2. Report which files were `ok`, `FIX`ed, or `WARN`ed.
 3. If it saved an `AGENTS.md.clobbered-*` backup (an agent wrote diverging rules into the symlink),
    open that backup, summarize what differs from `CLAUDE.md`, and **ask** before folding changes in.
@@ -86,7 +86,7 @@ one.
 ## Part 2 — Doctrine audit (judgment)
 
 Before starting, **read [`reference/doctrine.md`](reference/doctrine.md)** — the size budgets,
-the C1–C10 CLAUDE.md rubric, the 10 audit axes (each with a verify command), the scope-discipline
+the C1–C11 CLAUDE.md rubric, the 10 audit axes (each with a verify command), the scope-discipline
 principles, and the fix-class tags. When the target is a *skill* (a `SKILL.md`), also read
 [`reference/skill-axes.md`](reference/skill-axes.md).
 
@@ -94,20 +94,18 @@ Procedure:
 
 1. **Pick and state the mode.** Say whether this is a full doc review or scoped doc review and list
    the target set. If the user asked only for wiring, skip Part 2.
-2. **Inventory.** List in-scope files with non-blank line counts vs budget. Print it first — a
+2. **Inventory.** List in-scope files with estimated token cost vs budget. Print it first — a
    silent scope expansion is the most common failure mode. For always-loaded files, reuse the
    counts + verdicts the Part 1 script just printed (budget tiers: `reference/doctrine.md` →
-   Size budgets). For full doc review, count every other in-scope Markdown doc (no ceiling) with:
+   Size budgets). For full doc review, measure every other in-scope Markdown doc (no ceiling):
    ```bash
-   find . \
-     \( -path './.git' -o -path './.agents' -o -path './node_modules' -o -path './.venv' -o -path './venv' -o -path './build' -o -path './dist' \) -prune -o \
-     -name '*.md' ! -name 'AGENTS.md' -print | sort \
-     | while read -r f; do printf "%-70s %s\n" "$f" "$(grep -cE '[^[:space:]]' "$f")"; done
+   python3 scripts/docreview.py tokens
    ```
-   For scoped doc review, run the same count shape against the selected files only, then add direct
-   dependency docs that the target relies on.
+   For scoped doc review, pass just the selected files (`... tokens path/to/a.md path/to/b.md`),
+   then add direct dependency docs that the target relies on. **Never judge size by line count** —
+   a 30-line file of wide table rows can cost 2,000+ tokens.
 3. **Run every axis** from `reference/doctrine.md` against each in-scope Markdown file, using its
-   verify command — don't eyeball. For `CLAUDE.md` also walk the C1–C10 rubric; for each
+   verify command — don't eyeball. For `CLAUDE.md` also walk the C1–C11 rubric; for each
    `.claude/skills/*/SKILL.md`, also walk axes 1–12 in `reference/skill-axes.md`. Skill reference
    files are regular docs: run the doctrine axes, then verify their links from the owning skill.
    **Verify every claim against reality** (run the grep, `ls` the folder) — drift is the most
@@ -129,9 +127,9 @@ Procedure:
 ### Inventory
 Mode: full doc review
 
-| File | Non-blank | Budget | Verdict |
-|------|-----------|--------|---------|
-| CLAUDE.md | 56 | ≤200 | PASS |
+| File | Est. tokens | Budget | Verdict |
+|------|-------------|--------|---------|
+| CLAUDE.md | 850 | ≤2500 | PASS |
 
 ### Findings
 | Sev | Axis | File:line | Catch | Fix (class) |

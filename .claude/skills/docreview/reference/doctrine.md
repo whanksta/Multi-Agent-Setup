@@ -5,8 +5,8 @@ generalized. Load this when running the **doctrine audit** (Part 2 of the skill)
 
 Contents:
 - [Loading model](#loading-model) — what's always loaded vs on-demand vs referenced
-- [Size budgets](#size-budgets) — the non-blank-line ceilings + verdict scale
-- [CLAUDE.md authoring rubric (C1–C10)](#claudemd-authoring-rubric-c1c10)
+- [Size budgets](#size-budgets) — the token ceilings + verdict scale
+- [CLAUDE.md authoring rubric (C1–C11)](#claudemd-authoring-rubric-c1c11)
 - [The 10 audit axes](#the-10-audit-axes) — catch + verify command for each
 - [Scope-discipline principles](#scope-discipline-principles)
 - [Fix-classes](#fix-classes) — how a finding routes to an edit
@@ -20,7 +20,7 @@ The whole doctrine rests on *when* a doc enters the context window:
 
 - **Always-loaded.** The root instruction file loads in full at launch **and re-injects after
   `/compact`**. It's the only guaranteed-present layer. That file is `CLAUDE.md` — and via the
-  `AGENTS.md` symlink it's *also* what Codex and Antigravity load. So every line in `CLAUDE.md`
+  `AGENTS.md` symlink it's *also* what Codex and Antigravity load. So every token in `CLAUDE.md`
   is paid per turn by **three** agents. Budget hard.
 - **Scoped / on-demand.** A `*/CLAUDE.md` (or `.claude/rules/` file) loads only when an agent
   touches that folder, and **does NOT survive `/compact`**. A rule that must hold *everywhere*
@@ -39,20 +39,40 @@ Three consequences:
 
 ## Size budgets
 
-Count **non-blank lines only** — blank lines are one newline token each, aid readability, and
-don't eat the budget:
+Budget **estimated tokens that actually load** — never lines. Lines are a broken proxy: a single
+long table row counts as 1, so a ~6,600-token file could report PASS. This kit's own
+`skill-axes.md` is **30 non-blank lines and ~2,100 tokens**.
 
 ```sh
-grep -cE '[^[:space:]]' <file>     # canonical non-blank line count
+python3 scripts/docreview.py tokens              # every doc in scope
+python3 scripts/docreview.py tokens CLAUDE.md    # named files
 ```
 
-**Anthropic-2026 budget tiers** (always-loaded files only):
+Two rules keep the estimate honest:
 
-| Tier | File | Budget (non-blank lines) |
-|------|------|--------------------------|
-| Root | `CLAUDE.md` | ≤ 200 |
-| Umbrella / subject | a subtree's top `CLAUDE.md` | ≤ 150 |
-| Module / scoped | a folder-level `CLAUDE.md`, a `.claude/rules/` file | ≤ 80 |
+- **Measure only what loads.** Claude Code strips block-level HTML comments and YAML frontmatter
+  before injecting a memory file, and preserves comments inside code fences. Verified empirically:
+  7,200 chars inside `<!-- -->` cost **0** tokens vs **2,101** uncommented, and a 10,100-char
+  frontmatter block cost nothing beyond noise. The exception is a `SKILL.md`, whose `name` and
+  `description` *do* load via the always-present skill listing — those are charged.
+- **~2.5 chars per token.** Measured across this kit's docs (2.42–2.58). The familiar "~3.5 chars
+  per token" predates the Claude 4.7+ tokenizer and understates dense markdown by ~40%.
+
+**Opus-5-era budget tiers** (always-loaded files only):
+
+| Tier | File | Budget (est. tokens) | ≈ non-blank lines |
+|------|------|----------------------|-------------------|
+| Root | `CLAUDE.md` | ≤ 2,500 | ~80 |
+| Umbrella / subject | a subtree's top `CLAUDE.md` | ≤ 1,800 | ~60 |
+| Module / scoped | a folder-level `CLAUDE.md`, a `.claude/rules/` file | ≤ 1,000 | ~30 |
+
+The line column is **illustrative only** — derived from this kit's measured density of ~31 tokens
+per non-blank line. Don't gate on it; a single wide table row here costs ~330 tokens on its own.
+
+These sit **below** the "target under 200 lines" Anthropic still publishes, deliberately: 200 lines
+at this kit's density is ~6,800 tokens, Opus 5 needs less scaffolding than the models that number
+was written for (see C11), and this kit pays every root token **three times** — Claude, Codex, and
+Antigravity all load it. Non-blank lines are still printed, as an advisory readout only.
 
 **Verdict scale** per always-loaded file:
 - **PASS** — at or under budget.
@@ -65,14 +85,14 @@ Referenced-not-loaded docs have **no ceiling** but are still subject to genuine-
 
 ---
 
-## CLAUDE.md authoring rubric (C1–C10)
+## CLAUDE.md authoring rubric (C1–C11)
 
 Classify each finding **BLOCKER** (breaks loading/correctness) / **SHOULD** (degrades adherence)
 / **NIT** (polish). Cite `file:line`, name the axis.
 
 | Axis | Catch | Threshold / verify |
 |------|-------|--------------------|
-| **C1 Size** | Bloat dilutes adherence | < 200 non-blank lines (root). Cut anything learnable in one session (file locations, obvious commands); move occasional-reference material behind a pointer. |
+| **C1 Size** | Bloat dilutes adherence | ≤ 2,500 est. tokens (root) — check with `python3 scripts/docreview.py tokens`, not by eyeballing line count. Cut anything learnable in one session (file locations, obvious commands); move occasional-reference material behind a pointer. |
 | **C2 Specificity + imperative** | Vague / observational rules | Concrete + verifiable, not aspirational. Direct commands ("never X") not observations ("we generally don't"). **Prefer exact, copy-pasteable commands (`uv run pytest tests/unit/ -v`) over vague tool names ("run the tests").** Mark load-bearing rules `IMPORTANT`/`YOU MUST`. Include **negative** rules, not only positive. |
 | **C3 Beyond-inference** | Restating what code already says | Keep only what's NOT derivable from reading code (conventions, "why we rejected X", domain decodes, non-obvious gotchas) — and not already known to the model: generic best practices ("write tests", "use meaningful names") are noise. Delete restated signatures / directory listings. |
 | **C4 No contradiction** | Conflicting guidance across layers | Cross-check every loaded layer: root ↔ scoped ↔ `CLAUDE.local.md` ↔ `~/.claude/CLAUDE.md` (global) ↔ auto-memory — flag conflicts with the global file but don't audit it (not repo-owned). **Precedence: the more deeply-nested file wins within its subtree; root holds everywhere else** — a scoped rule *refining* root is a valid override, not a defect. Flag true conflicts: two layers disagreeing at the *same* scope, a scoped rule contradicting a meant-to-be-universal root rule, a rule contradicting verified code/behavior, or a stale survivor of a reversed instruction. |
@@ -81,7 +101,8 @@ Classify each finding **BLOCKER** (breaks loading/correctness) / **SHOULD** (deg
 | **C7 Freshness / no drift** | Stale counts, dates, paths | Verify every count/claim against reality (run the test, grep the source, `ls` the folder). Make relative dates absolute ("as of 2026-06-08", not "recently"). Flag paths/modules that no longer exist. |
 | **C8 Right mechanism** | Rule parked in the wrong tool | Multi-step or subtree-only → a **skill** or path-scoped rule (`.claude/rules/` with `paths:`). "Run before every commit / after every edit" → a **hook**, not prose. |
 | **C9 No secrets** | Leaked credentials | No passwords / tokens / connection strings / PII in any instruction file — a **BLOCKER**. The risk compounds if the repo syncs to cloud storage or is public. Secrets → env vars only. |
-| **C10 Imports + pointers** | Broken / expensive references | `@path` imports must resolve, be needed, and not pull in huge files (imports load in full at launch). "See X.md" pointers must resolve. `<!-- comments -->` are stripped from context — never put a load-bearing rule in one. |
+| **C10 Imports + pointers** | Broken / expensive references | `@path` imports must resolve, be needed, and not pull in huge files (imports load in full at launch). "See X.md" pointers must resolve. `<!-- comments -->` are stripped from context — never put a load-bearing rule in one, and equally, never count one against the budget: a maintainer note in a comment is free. |
+| **C11 Obsolete safeguards** | Rules written to defend against weaker models | Opus 5 self-verifies, self-corrects, and reads the situation better than a frozen rule can. **Delete** "verify your work" / "double-check before responding" / "re-read the file after editing" — these cause *over*-verification, not quality. Delete severity filters that muzzle a review ("only report high-severity"). Delete restated architecture, dependency lists, and directory trees — the model reconstructs those faster than you can maintain them. Anthropic cut **>80% of Claude Code's own system prompt** for these models with no measured eval loss. **Keep** repo-specific gotchas, rationale ("why we rejected X"), and conventions that differ from tool defaults. Ask of each line: *could the model derive this by reading the repo?* If yes, cut it. |
 
 ---
 
@@ -92,12 +113,11 @@ recipe names example paths like `CLAUDE.md docs/`, substitute the audited invent
 full or scoped run; examples show command shape, not scope.
 
 **1 — Trim.** Bloat; walls of text that should be tables; rationale dumps where a pointer would do.
-Size-budget violations on always-loaded files.
+Size-budget violations on always-loaded files. Judge by **tokens** — a short-looking file of wide
+table rows is the classic miss.
 ```sh
-find CLAUDE.md .claude/rules -name '*.md' 2>/dev/null | while read -r f; do printf "%-40s %s\n" "$f" "$(grep -cE '[^[:space:]]' "$f")"; done
+python3 scripts/docreview.py tokens
 ```
-(`find`, not a shell glob — in zsh a failed glob like `.claude/rules/*.md` aborts the whole
-command when the dir is empty or missing.)
 
 **2 — Tighten.** Restatement of parent doctrine in a child doc; scope creep; imprecise wording;
 forensic/transient detail (one-off command output, state snapshots) sitting in the doctrine body.
@@ -174,10 +194,13 @@ for the missing *contract*, not more content.
 - **OR5 — right-sized scope.** A child doc *points to* parent doctrine, never restates it.
   Operational test: restating ≥ 3 consecutive sentences from a linked doc is a violation —
   collapse to one sentence + a pointer. This is the single most common real defect.
-- **OR8 — minimal-but-correct.** Every line in an always-loaded doc must justify its per-turn
-  token cost. Prefer a pointer over a restatement, a table over prose, a row over narrative.
+- **OR8 — minimal-but-correct.** Every token in an always-loaded doc must justify its per-turn
+  cost. Prefer a pointer over a restatement, a table over prose, a row over narrative.
   Don't trim for its own sake and don't add speculatively — content earns its place when it
   states a rule future agents need at this scope.
+- **Subtraction is the default edit (C11).** Under Opus 5 the burden of proof sits on the line
+  that stays, not the line that goes. A rule written to prevent a specific failure freezes one
+  answer to a question the model now answers better by reading the situation.
 - **Contract surface, not content surface.** Always-loaded files hold contracts + pointers; heavy
   content lives in lazy-loaded skills or referenced docs.
 - **Stale vs volatile split.** Stale → fix against live source. Volatile → relocate out of doctrine.

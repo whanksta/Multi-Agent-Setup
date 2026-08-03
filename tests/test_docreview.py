@@ -236,5 +236,200 @@ class MissingInstructionFileReportTests(unittest.TestCase):
         )
 
 
+class SizeMeasurementTests(unittest.TestCase):
+    def test_long_lines_are_charged_for_their_real_cost(self) -> None:
+        """The bug this replaced: one huge line counted as 1 and passed."""
+        docreview = load_docreview_module()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            dense = Path(tmp) / "CLAUDE.md"
+            dense.write_text("| a | " + "x" * 12000 + " |\n", encoding="utf-8")
+
+            size = docreview.measure(dense)
+
+        self.assertEqual(size.lines, 1)
+        self.assertGreater(size.tokens, docreview.BUDGET_ROOT_TOKENS)
+
+    def test_block_html_comments_and_frontmatter_are_not_charged(self) -> None:
+        docreview = load_docreview_module()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            plain = Path(tmp) / "plain.md"
+            plain.write_text("# Rules\n\n- Use 2-space indent.\n", encoding="utf-8")
+
+            padded = Path(tmp) / "padded.md"
+            padded.write_text(
+                "---\npaths:\n  - 'src/**/*.ts'\n---\n"
+                "# Rules\n\n- Use 2-space indent.\n\n"
+                "<!--\n" + "maintainer note padding\n" * 200 + "-->\n",
+                encoding="utf-8",
+            )
+
+            plain_size = docreview.measure(plain)
+            padded_size = docreview.measure(padded)
+            raw_padded_tokens = len(padded.read_text(encoding="utf-8")) / docreview.CHARS_PER_TOKEN
+
+        # The frontmatter and the 200-line comment block cost nothing; only a
+        # stray blank line survives stripping, so allow a token of slack.
+        self.assertLessEqual(padded_size.tokens - plain_size.tokens, 1)
+        self.assertEqual(padded_size.lines, plain_size.lines)
+        self.assertGreater(raw_padded_tokens, plain_size.tokens * 50)
+
+    def test_comments_inside_code_fences_still_count(self) -> None:
+        docreview = load_docreview_module()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fenced = Path(tmp) / "fenced.md"
+            fenced.write_text(
+                "# Example\n\n```html\n<!-- this ships to the reader -->\n```\n",
+                encoding="utf-8",
+            )
+
+            size = docreview.measure(fenced)
+            kept = docreview.strip_unloaded(fenced.read_text(encoding="utf-8"))
+
+        self.assertIn("this ships to the reader", kept)
+        self.assertGreater(size.tokens, 0)
+
+    def test_leading_horizontal_rule_is_not_mistaken_for_frontmatter(self) -> None:
+        """A `---` hrule on line 1 must not swallow content up to the next `---`."""
+        docreview = load_docreview_module()
+
+        kept = docreview.strip_unloaded("---\n# Title\nBODY ONE\n---\nBODY TWO\n")
+
+        self.assertIn("BODY ONE", kept)
+        self.assertIn("BODY TWO", kept)
+
+    def test_real_yaml_frontmatter_is_still_dropped(self) -> None:
+        docreview = load_docreview_module()
+
+        kept = docreview.strip_unloaded("---\npaths:\n  - 'src/**/*.ts'\n---\nBODY\n")
+
+        self.assertEqual(kept, "BODY")
+
+    def test_longer_fence_is_not_closed_by_a_shorter_one(self) -> None:
+        """A ``` inside a ```` block must not expose it to comment-stripping."""
+        docreview = load_docreview_module()
+
+        kept = docreview.strip_unloaded("````\n```\n<!-- inside -->\n```\n````\nAFTER\n")
+
+        self.assertIn("<!-- inside -->", kept)
+        self.assertIn("AFTER", kept)
+
+    def test_skill_frontmatter_is_charged(self) -> None:
+        """A skill's name/description sit in the always-loaded skill listing."""
+        docreview = load_docreview_module()
+
+        body = "---\nname: demo\ndescription: " + "d" * 500 + "\n---\n\n# Demo\n\n- rule\n"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            skill = Path(tmp) / "SKILL.md"
+            skill.write_text(body, encoding="utf-8")
+            rule = Path(tmp) / "rule.md"
+            rule.write_text(body, encoding="utf-8")
+
+            self.assertGreater(docreview.measure(skill).tokens, 200)
+            self.assertLess(docreview.measure(rule).tokens, 20)
+
+    def test_estimate_tracks_the_real_tokenizer(self) -> None:
+        """Pins the estimator to observed truth, not to a rule of thumb.
+
+        `tests/fixtures/calibration.md` really costs 362 tokens on Opus 5,
+        measured as the delta in reported input tokens between two otherwise
+        identical `claude -p` runs. The estimator reads ~400: it errs high on
+        prose-heavy samples, which is the safe direction for a budget gate.
+        If this fails, the tokenizer moved - re-measure and update both numbers.
+        """
+        docreview = load_docreview_module()
+
+        size = docreview.measure(REPO_ROOT / "tests" / "fixtures" / "calibration.md")
+
+        self.assertAlmostEqual(size.tokens, 362, delta=round(362 * 0.15))
+
+    def test_over_budget_file_fails_the_check_command(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "CLAUDE.md").write_text("x" * 40000 + "\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("[Root] CLAUDE.md", result.stdout)
+        self.assertIn("- OVER", result.stdout)
+        self.assertNotIn("docreview: PASS", result.stdout)
+
+    def test_umbrella_claude_md_gets_the_wider_budget(self) -> None:
+        docreview = load_docreview_module()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "pkg" / "api").mkdir(parents=True)
+            umbrella = root / "pkg" / "CLAUDE.md"
+            leaf = root / "pkg" / "api" / "CLAUDE.md"
+            for path in (umbrella, leaf):
+                path.write_text("rules\n", encoding="utf-8")
+
+            scoped = [umbrella, leaf]
+
+            self.assertTrue(docreview.is_umbrella(umbrella, scoped))
+            self.assertFalse(docreview.is_umbrella(leaf, scoped))
+
+    def test_rules_are_discovered_in_subdirectories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "CLAUDE.md").write_text("root\n", encoding="utf-8")
+            nested = root / ".claude" / "rules" / "backend"
+            nested.mkdir(parents=True)
+            (nested / "testing.md").write_text("- run pytest\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn(".claude/rules/backend/testing.md", result.stdout)
+
+    def test_tokens_command_reports_named_files(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_PATH), "tokens", str(REPO_ROOT / "CLAUDE.md")],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("CLAUDE.md", result.stdout)
+        self.assertIn("tok", result.stdout)
+
+    def test_tokens_command_skips_the_agents_symlink(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_PATH), "tokens"],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertNotIn("AGENTS.md", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

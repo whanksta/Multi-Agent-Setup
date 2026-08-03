@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,9 +25,34 @@ from typing import NamedTuple
 # Safe to run anytime. Auto-fixes symlinks and backs up diverging content to
 # *.clobbered-<timestamp> before repair.
 
-BUDGET_ROOT_CLAUDE = 200
-BUDGET_SCOPED_CLAUDE = 80
-BUDGET_RULES_FILE = 80
+# Budgets are in ESTIMATED TOKENS, not lines. Lines were a broken proxy: one
+# 1,800-char table row counted as 1, so a ~6,600-token file could report PASS.
+# Line counts are still printed, but only as an advisory readout.
+#
+# CHARS_PER_TOKEN is measured, not assumed. The widely-quoted "~3.5 English
+# chars per token" predates the Claude 4.7+ tokenizer and understates dense
+# markdown by ~40%. Measured against this repo's own docs as the delta in
+# reported input tokens between two otherwise-identical `claude -p` runs:
+#   CLAUDE.md 2.58 | doctrine.md 2.52 | SKILL.md 2.52 | README.md 2.42
+# 2.5 is the working constant for agent-instruction markdown. Re-derive it the
+# same way if the tokenizer changes; `docreview.py tokens` reports the estimate.
+CHARS_PER_TOKEN = 2.5
+
+BUDGET_ROOT_TOKENS = 2500
+BUDGET_UMBRELLA_TOKENS = 1800
+BUDGET_SCOPED_TOKENS = 1000
+BUDGET_RULES_TOKENS = 1000
+
+# A fence is 3+ backticks or tildes; the closer must be at least as long as the
+# opener (CommonMark), or a ``` inside a ```` block would close it early and
+# expose its contents to comment-stripping.
+FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
+
+# A leading `---` only opens YAML frontmatter if the block actually looks like
+# YAML. Without this, a doc whose first line is a `---` horizontal rule loses
+# everything up to the next `---` - silent under-counting, the dangerous
+# direction for a budget gate.
+YAML_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*\s*:")
 
 IGNORED_DIRS = {
     ".agents",
@@ -52,15 +79,101 @@ def relative(path: Path, root_dir: Path) -> Path:
     return path.relative_to(root_dir)
 
 
-def count_non_blank_lines(file_path: Path) -> int:
-    """Count non-blank lines in a file."""
-    try:
-        lines = file_path.read_text(encoding="utf-8", errors="ignore").splitlines()
-    except OSError as exc:
-        print(f"  ERROR Reading {file_path}: {exc}")
+class DocSize(NamedTuple):
+    """What a doc actually costs once it reaches the context window."""
+
+    tokens: int
+    lines: int
+
+
+def frontmatter_end(lines: list[str]) -> int:
+    """Return the index just past a real YAML frontmatter block, else 0."""
+    if not lines or lines[0].rstrip() != "---":
         return 0
 
-    return sum(1 for line in lines if line.strip())
+    for close in range(1, len(lines)):
+        if lines[close].rstrip() != "---":
+            continue
+        block = [line for line in lines[1:close] if line.strip()]
+        if block and any(YAML_KEY_RE.match(line) for line in block):
+            return close + 1
+        return 0
+
+    return 0
+
+
+def strip_unloaded(text: str, *, drop_frontmatter: bool = True) -> str:
+    """Drop the parts of an instruction file that never reach the context window.
+
+    Claude Code strips YAML frontmatter and block-level HTML comments before
+    injecting a memory file, and preserves comments inside fenced code blocks.
+    Measured empirically: 7,200 chars inside `<!-- -->` cost 0 tokens while the
+    same text uncommented cost 2,101, and a 10,100-char frontmatter block cost
+    nothing beyond run-to-run noise. Measuring the raw file would charge a doc
+    for bytes it never pays for.
+    """
+    lines = text.splitlines()
+    start = frontmatter_end(lines) if drop_frontmatter else 0
+
+    kept: list[str] = []
+    fence: tuple[str, int] | None = None
+    in_comment = False
+
+    for raw_line in lines[start:]:
+        line = raw_line
+
+        if in_comment:
+            _, closed, tail = line.partition("-->")
+            if not closed:
+                continue
+            in_comment = False
+            line = tail
+
+        # Comment syntax is literal inside a code fence, so only peel comments
+        # when we are outside one.
+        if fence is None:
+            while line.strip().startswith("<!--"):
+                _, closed, tail = line.partition("-->")
+                if not closed:
+                    in_comment = True
+                    break
+                line = tail
+            if in_comment:
+                continue
+            if raw_line.strip() and not line.strip():
+                continue  # the line held nothing but comments
+
+        match = FENCE_RE.match(line.strip())
+
+        if fence is not None:
+            kept.append(line)
+            if match and match.group()[0] == fence[0] and len(match.group()) >= fence[1]:
+                fence = None
+            continue
+
+        if match:
+            fence = (match.group()[0], len(match.group()))
+
+        kept.append(line)
+
+    return "\n".join(kept)
+
+
+def measure(file_path: Path) -> DocSize:
+    """Estimate the context cost of one doc, ignoring content that never loads."""
+    try:
+        raw = file_path.read_text(encoding="utf-8", errors="ignore")
+    except OSError as exc:
+        print(f"  ERROR Reading {file_path}: {exc}")
+        return DocSize(0, 0)
+
+    # A skill's frontmatter is the one kind that DOES load: `name` +
+    # `description` sit in the always-present skill listing. Charge for it.
+    loaded = strip_unloaded(raw, drop_frontmatter=file_path.name != "SKILL.md")
+    return DocSize(
+        math.ceil(len(loaded) / CHARS_PER_TOKEN),
+        sum(1 for line in loaded.splitlines() if line.strip()),
+    )
 
 
 def iter_scoped_claude_files(root_dir: Path):
@@ -326,17 +439,20 @@ def audit_wiring(root_dir: Path, timestamp: str) -> int:
 def print_budget_verdict(
     label: str,
     rel_path: Path | str,
-    line_count: int,
+    size: DocSize,
     budget: int,
 ) -> int:
     """Print one budget verdict and return a non-zero status for hard failures."""
-    prefix = f"  {{level:<5}} [{label}] {rel_path} count: {line_count} (budget <= {budget})"
+    prefix = (
+        f"  {{level:<5}} [{label}] {rel_path} ~{size.tokens} tok "
+        f"(budget <= {budget}, {size.lines} non-blank lines)"
+    )
 
-    if line_count <= budget:
+    if size.tokens <= budget:
         print(prefix.format(level="ok") + " - PASS")
         return 0
 
-    if line_count < budget * 1.5:
+    if size.tokens < budget * 1.5:
         print(prefix.format(level="WARN") + " - WITHIN-SLACK")
         return 0
 
@@ -344,35 +460,43 @@ def print_budget_verdict(
     return 1
 
 
+def is_umbrella(scoped_claude: Path, all_scoped: list[Path]) -> bool:
+    """Return whether this scoped CLAUDE.md tops a subtree holding further ones."""
+    parent = scoped_claude.parent
+    return any(other != scoped_claude and parent in other.parents for other in all_scoped)
+
+
 def audit_budgets(root_dir: Path) -> int:
-    """Part 2: Audit non-blank line counts against size budgets."""
+    """Part 2: Audit estimated token cost against size budgets."""
     status = 0
-    print("\ndocreview: checking size budgets (non-blank lines)")
+    print("\ndocreview: checking size budgets (estimated tokens; lines advisory)")
 
     root_claude = root_dir / "CLAUDE.md"
     status |= print_budget_verdict(
         "Root",
         root_claude.name,
-        count_non_blank_lines(root_claude),
-        BUDGET_ROOT_CLAUDE,
+        measure(root_claude),
+        BUDGET_ROOT_TOKENS,
     )
 
-    for scoped_claude in iter_scoped_claude_files(root_dir):
+    scoped_files = list(iter_scoped_claude_files(root_dir))
+    for scoped_claude in scoped_files:
+        umbrella = is_umbrella(scoped_claude, scoped_files)
         status |= print_budget_verdict(
-            "Scoped",
+            "Umbrella" if umbrella else "Scoped",
             relative(scoped_claude, root_dir),
-            count_non_blank_lines(scoped_claude),
-            BUDGET_SCOPED_CLAUDE,
+            measure(scoped_claude),
+            BUDGET_UMBRELLA_TOKENS if umbrella else BUDGET_SCOPED_TOKENS,
         )
 
     rules_dir = root_dir / ".claude" / "rules"
     if rules_dir.is_dir():
-        for rules_file in sorted(rules_dir.glob("*.md")):
+        for rules_file in sorted(rules_dir.rglob("*.md")):
             status |= print_budget_verdict(
                 "Rule",
                 relative(rules_file, root_dir),
-                count_non_blank_lines(rules_file),
-                BUDGET_RULES_FILE,
+                measure(rules_file),
+                BUDGET_RULES_TOKENS,
             )
 
     return status
@@ -441,6 +565,53 @@ def print_missing_instruction_report(root_dir: Path) -> int:
     return 0
 
 
+def iter_markdown_docs(root_dir: Path):
+    """Yield repo-owned Markdown docs, skipping symlink mirrors and vendored dirs."""
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        dirnames[:] = sorted(
+            name
+            for name in dirnames
+            if name not in IGNORED_DIRS and not (Path(dirpath) / name).is_symlink()
+        )
+
+        path = Path(dirpath)
+        for name in sorted(filenames):
+            if not name.endswith(".md"):
+                continue
+            # AGENTS.md is a symlink to CLAUDE.md - counting it double-counts.
+            if name == "AGENTS.md" or (path / name).is_symlink():
+                continue
+            yield path / name
+
+
+def print_token_report(root_dir: Path, paths: list[str]) -> int:
+    """Print estimated token cost for named docs, or every doc in scope."""
+    if paths:
+        targets = [Path(p).expanduser() for p in paths]
+    else:
+        targets = list(iter_markdown_docs(root_dir))
+        print(f"docreview: estimating context cost of Markdown docs in {root_dir}")
+
+    status = 0
+    for target in targets:
+        if not target.is_file():
+            print(f"  ERROR {target} is not a readable file")
+            status = 1
+            continue
+
+        size = measure(target)
+        try:
+            label = relative(target.resolve(), root_dir).as_posix()
+        except ValueError:
+            label = str(target)
+        print(f"  {label:<60} ~{size.tokens:>6} tok  {size.lines:>5} non-blank lines")
+
+    print(f"  note  ~tok is chars/{CHARS_PER_TOKEN} over content that actually loads:")
+    print("        block-level HTML comments are excluded everywhere, and YAML")
+    print("        frontmatter everywhere except SKILL.md (whose description loads).")
+    return status
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the command-line parser."""
     parser = argparse.ArgumentParser(
@@ -449,9 +620,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=("check", "missing"),
+        choices=("check", "missing", "tokens"),
         default="check",
-        help="check repairs wiring and budgets; missing reports directories without both files",
+        help=(
+            "check repairs wiring and budgets; missing reports directories without "
+            "both files; tokens reports estimated context cost per doc"
+        ),
+    )
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        help="files to measure with the tokens command; defaults to every doc in scope",
     )
     parser.add_argument(
         "--scope",
@@ -482,6 +661,9 @@ def main() -> None:
 
     if args.command == "missing":
         sys.exit(print_missing_instruction_report(root_dir))
+
+    if args.command == "tokens":
+        sys.exit(print_token_report(root_dir, args.paths))
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 

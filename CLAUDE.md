@@ -16,10 +16,14 @@
 
 ## Scoped CLAUDE.md files
 - Start with just root `CLAUDE.md`. Add a scoped `CLAUDE.md` to a folder/subsystem **when it grows a
-  convention or foot-gun not obvious from its code, or when root crosses ~200 lines** and a section
-  is folder-specific. If you can't name the reason in one sentence, don't create the file.
-- Scoped files **point to** root doctrine — never restate it. Keep each ≤ 80 non-blank lines.
-- Keep root `CLAUDE.md` under ~200 non-blank lines; push heavy content into `docs/` or a skill.
+  convention or foot-gun not obvious from its code, or when root crosses its token budget** and a
+  section is folder-specific. If you can't name the reason in one sentence, don't create the file.
+- Scoped files **point to** root doctrine — never restate it. Keep each ≤ 1,000 est. tokens.
+- Keep root `CLAUDE.md` under 2,500 est. tokens; push heavy content into `docs/` or a skill.
+  **Budget tokens, not lines** — a wide table row can cost 300+ on its own. Check with
+  `python3 scripts/docreview.py tokens`.
+- Prefer deleting to adding. Opus 5 self-verifies and reads context — rules like "double-check your
+  work", restated directory trees, and dependency lists cost adherence without buying anything.
 - A must-hold-**everywhere** rule belongs in **root** `CLAUDE.md` — scoped files load only when that
   folder is touched and don't survive `/compact`.
 - **On conflict, the more deeply-nested file wins for its subtree; root holds everywhere else.**

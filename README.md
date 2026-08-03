@@ -134,7 +134,7 @@ The agent's per-file contract. "Copy exactly" means byte-for-byte from the clone
 | `AGENTS.md` | Symlink to `CLAUDE.md` for Codex and Antigravity. |
 | `.claude/skills/` | Canonical shared skills directory. |
 | `.agents/skills` | Folder symlink to `.claude/skills`. |
-| `scripts/docreview.py` | Verifies and repairs wiring; checks instruction-file size budgets. |
+| `scripts/docreview.py` | Verifies and repairs wiring; checks instruction-file size budgets in estimated tokens. |
 | `.claude/skills/docreview/` | Agent skill for wiring checks and doc-doctrine review. |
 | `.claude/skills/codebase-audit/` | Core agent skill + script for structural hotspot/churn signals (advisory, not a gate). |
 | `VERSION` | Kit version string; copied into an adopting repo as `.claude/.mas-version`. |
@@ -236,6 +236,17 @@ python3 scripts/docreview.py missing
 python3 scripts/docreview.py missing --scope repo
 python3 scripts/docreview.py missing --scope worktree
 python3 scripts/docreview.py missing --scope path --path path/to/subtree
+```
+
+To see what each doc actually costs in context, use the `tokens` command. Size budgets are measured
+in **estimated tokens, not lines** — a 30-line file of wide table rows can cost 2,000+ tokens, so a
+line count hides real bloat. The estimate is `chars / 2.5` over the content that actually loads;
+YAML frontmatter and block-level HTML comments are excluded because Claude Code strips them before
+injection.
+
+```bash
+python3 scripts/docreview.py tokens                # every doc in scope
+python3 scripts/docreview.py tokens CLAUDE.md      # named files
 ```
 
 The default scope is auto: use the project that owns `scripts/docreview.py`, independent of the
