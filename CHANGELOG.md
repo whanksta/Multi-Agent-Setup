@@ -53,6 +53,12 @@ Historical entries were reconstructed from Git history through `7b20a84`.
 
 - `.claude/rules/` files are now discovered recursively, matching Claude Code's documented
   behavior. Previously a rule in `.claude/rules/backend/testing.md` was never budget-checked.
+- README no longer claims YAML frontmatter is excluded unconditionally; it states the `SKILL.md`
+  exception, matching what the script reports (axis 8 drift).
+- README's Gemini CLI note moved to past tense — the June 18, 2026 cutover date has passed.
+- The manual-install `.gitignore` step is now idempotent. It appended the whole file, so re-running
+  an install duplicated every entry; it now adds only missing lines, matching the Adoption File
+  Policy's "preserve unrelated target entries". Verified: three consecutive runs, no duplicates.
 
 ## 2026-06-16
 

@@ -178,7 +178,10 @@ cp -r "$SRC"/.claude/skills/docreview "$DST"/.claude/skills/
 cp -r "$SRC"/.claude/skills/codebase-audit "$DST"/.claude/skills/
 mkdir -p "$DST"/.githooks
 cp "$SRC"/.githooks/pre-commit "$DST"/.githooks/
-cat "$SRC"/.gitignore >> "$DST"/.gitignore
+touch "$DST"/.gitignore                          # add missing entries only; re-runnable
+while IFS= read -r l; do
+  [ -n "$l" ] && ! grep -qxF "$l" "$DST"/.gitignore && printf '%s\n' "$l" >> "$DST"/.gitignore
+done < "$SRC"/.gitignore
 cp "$SRC"/VERSION "$DST"/.claude/.mas-version   # record the adopted version
 
 if [ -e "$DST"/CLAUDE.md ]; then
@@ -205,9 +208,9 @@ instead of overwriting them.
 - **Windows:** symlinks require Developer Mode plus `git config core.symlinks true`, or an elevated
   shell. If symlinks check out as plain files, `docreview` will report the problem and repair it
   when the OS permits.
-- **Gemini CLI:** Google announced that individual/free, Pro, and Ultra Gemini CLI request serving
-  ends on June 18, 2026, with those users moving to Antigravity CLI; enterprise and API-key access
-  differs. See Google's
+- **Gemini CLI:** Google ended individual/free, Pro, and Ultra Gemini CLI request serving on
+  June 18, 2026, moving those users to Antigravity CLI; enterprise and API-key access differs.
+  See Google's
   [transition note](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/).
   This kit targets Antigravity through `AGENTS.md` and no longer ships `GEMINI.md`.
 
@@ -240,9 +243,9 @@ python3 scripts/docreview.py missing --scope path --path path/to/subtree
 
 To see what each doc actually costs in context, use the `tokens` command. Size budgets are measured
 in **estimated tokens, not lines** — a 30-line file of wide table rows can cost 2,000+ tokens, so a
-line count hides real bloat. The estimate is `chars / 2.5` over the content that actually loads;
-YAML frontmatter and block-level HTML comments are excluded because Claude Code strips them before
-injection.
+line count hides real bloat. The estimate is `chars / 2.5` over the content that actually loads:
+block-level HTML comments are excluded everywhere, and YAML frontmatter everywhere except a
+`SKILL.md`, whose `name`/`description` do load via the skill listing.
 
 ```bash
 python3 scripts/docreview.py tokens                # every doc in scope
