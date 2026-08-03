@@ -54,6 +54,9 @@ FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
 # direction for a budget gate.
 YAML_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*\s*:")
 
+# CHANGELOG batch headings the adoption flow compares against .claude/.mas-version.
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
 IGNORED_DIRS = {
     ".agents",
     ".git",
@@ -433,6 +436,7 @@ def audit_wiring(root_dir: Path, timestamp: str) -> int:
             status = 1
 
     status |= check_skill_mirror(root_dir, timestamp)
+    status |= audit_version_stamp(root_dir)
     return status
 
 
@@ -464,6 +468,50 @@ def is_umbrella(scoped_claude: Path, all_scoped: list[Path]) -> bool:
     """Return whether this scoped CLAUDE.md tops a subtree holding further ones."""
     parent = scoped_claude.parent
     return any(other != scoped_claude and parent in other.parents for other in all_scoped)
+
+
+def audit_version_stamp(root_dir: Path) -> int:
+    """Check VERSION against the newest dated CHANGELOG batch.
+
+    The adoption flow stamps VERSION into a target as `.claude/.mas-version`,
+    then applies only the CHANGELOG batches dated newer than that marker. If the
+    two drift, adopters silently skip an update and nothing surfaces it. Only
+    the kit's source repo has both files; elsewhere this is a no-op.
+    """
+    version_file = root_dir / "VERSION"
+    changelog = root_dir / "CHANGELOG.md"
+    if not (version_file.is_file() and changelog.is_file()):
+        return 0
+
+    try:
+        version = version_file.read_text(encoding="utf-8", errors="ignore").strip()
+        entries = changelog.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError as exc:
+        print(f"  ERROR Reading VERSION/CHANGELOG.md: {exc}")
+        return 1
+
+    newest = next(
+        (
+            line[len("## ") :].strip()
+            for line in entries
+            if line.startswith("## ") and DATE_RE.match(line[len("## ") :].strip())
+        ),
+        None,
+    )
+    if newest is None:
+        print("  WARN  CHANGELOG.md has no dated '## YYYY-MM-DD' batch to check VERSION against.")
+        return 0
+
+    if version == newest:
+        print(f"  ok    VERSION {version} matches the newest CHANGELOG batch.")
+        return 0
+
+    print(
+        f"  FAIL  VERSION is {version!r} but the newest CHANGELOG batch is {newest!r}. "
+        "Adopters compare .claude/.mas-version against these headings, so a "
+        "mismatch silently skips an update."
+    )
+    return 1
 
 
 def audit_budgets(root_dir: Path) -> int:

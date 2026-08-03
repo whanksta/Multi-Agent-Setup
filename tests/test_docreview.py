@@ -236,6 +236,51 @@ class MissingInstructionFileReportTests(unittest.TestCase):
         )
 
 
+class VersionStampTests(unittest.TestCase):
+    def _repo(self, tmp: str, version: str, heading: str) -> Path:
+        root = Path(tmp)
+        (root / "VERSION").write_text(version + "\n", encoding="utf-8")
+        (root / "CHANGELOG.md").write_text(
+            f"# Changelog\n\nintro prose\n\n## {heading}\n\n### Fixed\n\n- thing\n",
+            encoding="utf-8",
+        )
+        return root
+
+    def test_matching_version_and_newest_batch_passes(self) -> None:
+        docreview = load_docreview_module()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._repo(tmp, "2026-08-03", "2026-08-03")
+            self.assertEqual(docreview.audit_version_stamp(root), 0)
+
+    def test_drifted_version_fails(self) -> None:
+        """A mismatch silently skips an update for every adopter."""
+        docreview = load_docreview_module()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._repo(tmp, "2026-06-16", "2026-08-03")
+            self.assertEqual(docreview.audit_version_stamp(root), 1)
+
+    def test_no_op_in_an_adopting_repo(self) -> None:
+        """Adopters get neither VERSION nor CHANGELOG.md - must not fail there."""
+        docreview = load_docreview_module()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(docreview.audit_version_stamp(Path(tmp)), 0)
+
+    def test_undated_heading_is_skipped_not_failed(self) -> None:
+        docreview = load_docreview_module()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._repo(tmp, "2026-08-03", "Unreleased")
+            self.assertEqual(docreview.audit_version_stamp(root), 0)
+
+    def test_this_repo_is_in_sync(self) -> None:
+        docreview = load_docreview_module()
+
+        self.assertEqual(docreview.audit_version_stamp(REPO_ROOT), 0)
+
+
 class SizeMeasurementTests(unittest.TestCase):
     def test_long_lines_are_charged_for_their_real_cost(self) -> None:
         """The bug this replaced: one huge line counted as 1 and passed."""
