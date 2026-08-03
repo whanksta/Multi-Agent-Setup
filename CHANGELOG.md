@@ -25,6 +25,10 @@ Historical entries were reconstructed from Git history through `7b20a84`.
   further scoped files) from a leaf scoped file, and gives it the wider budget.
 - Skill-authoring axis 3 (body size budget) switched from lines/words to estimated tokens: a domain
   skill <= ~5,000, an orchestrator <= ~10,000.
+- Trimmed `doctrine.md` by 6.8% (6,803 -> 6,341 est. tokens) by applying its own OR5 rule to itself:
+  "CLAUDE.md's budget matters 3x" was stated three times, "Multi-agent specifics" largely restated
+  the skill's own Gotchas, and C3/C11 both owned "delete restated directory trees". No rule was
+  dropped - all 11 C-axes, 10 audit axes, and 10 fix-classes remain.
 - Added doctrine axis **C11 (obsolete safeguards)**: delete instructions written to defend against
   weaker models — "verify your work", "double-check before responding", review severity filters,
   and restated architecture / dependency lists / directory trees. Opus 5 self-verifies, and

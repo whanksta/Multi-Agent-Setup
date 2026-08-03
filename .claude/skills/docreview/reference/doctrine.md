@@ -29,19 +29,18 @@ The whole doctrine rests on *when* a doc enters the context window:
   reference files like this one cost nothing until something opens them. No hard size ceiling, but
   still flag genuine bloat.
 
-Three consequences:
+Two consequences:
 - **CLAUDE.md is a contract surface, not a content surface.** Contracts + pointers live there;
-  heavy content lives in referenced docs or lazy-loaded skills.
-- **Pointers beat restatement.** A child doc points to parent doctrine; it never restates it.
+  heavy content lives in referenced docs or lazy-loaded skills. (Operational test: OR5 below.)
 - **Guidance, not enforcement.** A must-always-hold guarantee needs a hook or CI, not a sentence.
 
 ---
 
 ## Size budgets
 
-Budget **estimated tokens that actually load** — never lines. Lines are a broken proxy: a single
-long table row counts as 1, so a ~6,600-token file could report PASS. This kit's own
-`skill-axes.md` is **30 non-blank lines and ~2,100 tokens**.
+Budget **estimated tokens that actually load** — never lines. Lines are a broken proxy: one long
+table row counts as 1, so a ~6,600-token file could report PASS. This kit's own `skill-axes.md` is
+**30 non-blank lines and ~2,100 tokens**, and a single wide row here costs ~330 tokens.
 
 ```sh
 python3 scripts/docreview.py tokens              # every doc in scope
@@ -51,34 +50,30 @@ python3 scripts/docreview.py tokens CLAUDE.md    # named files
 Two rules keep the estimate honest:
 
 - **Measure only what loads.** Claude Code strips block-level HTML comments and YAML frontmatter
-  before injecting a memory file, and preserves comments inside code fences. Verified empirically:
-  7,200 chars inside `<!-- -->` cost **0** tokens vs **2,101** uncommented, and a 10,100-char
-  frontmatter block cost nothing beyond noise. The exception is a `SKILL.md`, whose `name` and
-  `description` *do* load via the always-present skill listing — those are charged.
+  before injecting a memory file, and preserves comments inside code fences. Verified: 7,200 chars
+  inside `<!-- -->` cost **0** tokens vs **2,101** uncommented. The exception is a `SKILL.md`, whose
+  `name`/`description` *do* load via the skill listing — those are charged.
 - **~2.5 chars per token.** Measured across this kit's docs (2.42–2.58). The familiar "~3.5 chars
   per token" predates the Claude 4.7+ tokenizer and understates dense markdown by ~40%.
 
 **Opus-5-era budget tiers** (always-loaded files only):
 
-| Tier | File | Budget (est. tokens) | ≈ non-blank lines |
-|------|------|----------------------|-------------------|
+| Tier | File | Budget (est. tokens) | ≈ lines |
+|------|------|----------------------|---------|
 | Root | `CLAUDE.md` | ≤ 2,500 | ~80 |
 | Umbrella / subject | a subtree's top `CLAUDE.md` | ≤ 1,800 | ~60 |
 | Module / scoped | a folder-level `CLAUDE.md`, a `.claude/rules/` file | ≤ 1,000 | ~30 |
 
-The line column is **illustrative only** — derived from this kit's measured density of ~31 tokens
-per non-blank line. Don't gate on it; a single wide table row here costs ~330 tokens on its own.
-
-These sit **below** the "target under 200 lines" Anthropic still publishes, deliberately: 200 lines
-at this kit's density is ~6,800 tokens, Opus 5 needs less scaffolding than the models that number
-was written for (see C11), and this kit pays every root token **three times** — Claude, Codex, and
-Antigravity all load it. Non-blank lines are still printed, as an advisory readout only.
+The line column is illustrative only (~31 tokens per non-blank line here) — never gate on it. These
+tiers sit **below** Anthropic's published "under 200 lines" deliberately: 200 lines at this density
+is ~6,800 tokens, Opus 5 needs less scaffolding than that number assumes (C11), and every root token
+is paid **three times** — Claude, Codex, and Antigravity all load `CLAUDE.md`.
 
 **Verdict scale** per always-loaded file:
 - **PASS** — at or under budget.
 - **WITHIN-SLACK** — over budget but < 1.5×. Soft flag; note for next pass.
 - **OVER** — ≥ 1.5× budget. Hard flag; the finding must propose a concrete trim target (which
-  sections move where, est. lines saved).
+  sections move where, est. tokens saved).
 
 Referenced-not-loaded docs have **no ceiling** but are still subject to genuine-bloat flagging
 (a 60-line table where 15 rows do; prose where structured rows belong).
@@ -94,7 +89,7 @@ Classify each finding **BLOCKER** (breaks loading/correctness) / **SHOULD** (deg
 |------|-------|--------------------|
 | **C1 Size** | Bloat dilutes adherence | ≤ 2,500 est. tokens (root) — check with `python3 scripts/docreview.py tokens`, not by eyeballing line count. Cut anything learnable in one session (file locations, obvious commands); move occasional-reference material behind a pointer. |
 | **C2 Specificity + imperative** | Vague / observational rules | Concrete + verifiable, not aspirational. Direct commands ("never X") not observations ("we generally don't"). **Prefer exact, copy-pasteable commands (`uv run pytest tests/unit/ -v`) over vague tool names ("run the tests").** Mark load-bearing rules `IMPORTANT`/`YOU MUST`. Include **negative** rules, not only positive. |
-| **C3 Beyond-inference** | Restating what code already says | Keep only what's NOT derivable from reading code (conventions, "why we rejected X", domain decodes, non-obvious gotchas) — and not already known to the model: generic best practices ("write tests", "use meaningful names") are noise. Delete restated signatures / directory listings. |
+| **C3 Beyond-inference** | Restating what code already says | Keep only what's NOT derivable from reading code (conventions, "why we rejected X", domain decodes, non-obvious gotchas) — and not already known to the model: generic best practices ("write tests", "use meaningful names") are noise. Delete restated signatures, directory trees, architecture overviews, and dependency lists; the model reconstructs those faster than you can maintain them. |
 | **C4 No contradiction** | Conflicting guidance across layers | Cross-check every loaded layer: root ↔ scoped ↔ `CLAUDE.local.md` ↔ `~/.claude/CLAUDE.md` (global) ↔ auto-memory — flag conflicts with the global file but don't audit it (not repo-owned). **Precedence: the more deeply-nested file wins within its subtree; root holds everywhere else** — a scoped rule *refining* root is a valid override, not a defect. Flag true conflicts: two layers disagreeing at the *same* scope, a scoped rule contradicting a meant-to-be-universal root rule, a rule contradicting verified code/behavior, or a stale survivor of a reversed instruction. |
 | **C5 Structure** | Rules buried in prose | Headers + bullets, scannable. Split dense multi-claim paragraphs; one idea per bullet. |
 | **C6 Scope placement** | Rule in the wrong layer | A hold-**everywhere** rule belongs in **root** (scoped files may not load / don't survive `/compact`) — an always-rule living only in a scoped file is a **BLOCKER**. A folder-only rule bloating root is a SHOULD-fix. |
@@ -102,7 +97,7 @@ Classify each finding **BLOCKER** (breaks loading/correctness) / **SHOULD** (deg
 | **C8 Right mechanism** | Rule parked in the wrong tool | Multi-step or subtree-only → a **skill** or path-scoped rule (`.claude/rules/` with `paths:`). "Run before every commit / after every edit" → a **hook**, not prose. |
 | **C9 No secrets** | Leaked credentials | No passwords / tokens / connection strings / PII in any instruction file — a **BLOCKER**. The risk compounds if the repo syncs to cloud storage or is public. Secrets → env vars only. |
 | **C10 Imports + pointers** | Broken / expensive references | `@path` imports must resolve, be needed, and not pull in huge files (imports load in full at launch). "See X.md" pointers must resolve. `<!-- comments -->` are stripped from context — never put a load-bearing rule in one, and equally, never count one against the budget: a maintainer note in a comment is free. |
-| **C11 Obsolete safeguards** | Rules written to defend against weaker models | Opus 5 self-verifies, self-corrects, and reads the situation better than a frozen rule can. **Delete** "verify your work" / "double-check before responding" / "re-read the file after editing" — these cause *over*-verification, not quality. Delete severity filters that muzzle a review ("only report high-severity"). Delete restated architecture, dependency lists, and directory trees — the model reconstructs those faster than you can maintain them. Anthropic cut **>80% of Claude Code's own system prompt** for these models with no measured eval loss. **Keep** repo-specific gotchas, rationale ("why we rejected X"), and conventions that differ from tool defaults. Ask of each line: *could the model derive this by reading the repo?* If yes, cut it. |
+| **C11 Obsolete safeguards** | Rules written to defend against weaker models | Opus 5 self-verifies and reads the situation better than a frozen rule can — Anthropic cut **>80% of Claude Code's own system prompt** for these models with no measured eval loss. **Delete:** "verify your work" / "double-check before responding" / "re-read the file after editing" (these cause *over*-verification, not quality); severity filters that muzzle a review ("only report high-severity"); any rule freezing one answer to a question the model can now judge per-situation. **Keep:** repo-specific gotchas, rationale, conventions differing from tool defaults. (Derivable content is C3's job.) |
 
 ---
 
@@ -168,9 +163,9 @@ Discipline: if doctrine is *descriptive* but reality disagrees, the **doc lied �
 If it's *aspirational*, tag `ASPIRATIONAL` and ask the user — the gap may be a real bug; never
 silently rewrite the doc to match reality.
 
-**9 — Lazy-load-eligibility.** ≥ 40 contiguous lines of heavy content (deep spec, long table,
-worked example, code block ≥ 20 lines) in an always-loaded file → move to a skill reference or a
-`docs/<topic>.md`, leaving a ≤ 5-line pointer that says *when* to load it.
+**9 — Lazy-load-eligibility.** A contiguous block of heavy content (deep spec, long table, worked
+example, code block ≥ 20 lines) worth ≥ ~40 lines or ~1,200 tokens in an always-loaded file → move
+to a skill reference or a `docs/<topic>.md`, leaving a ≤ 5-line pointer that says *when* to load it.
 ```sh
 awk '/^## /{if(last)print last_l,last; last=$0; last_l=0; next}{last_l++}END{if(last)print last_l,last}' CLAUDE.md | sort -rn | head
 ```
@@ -201,11 +196,6 @@ for the missing *contract*, not more content.
 - **Subtraction is the default edit (C11).** Under Opus 5 the burden of proof sits on the line
   that stays, not the line that goes. A rule written to prevent a specific failure freezes one
   answer to a question the model now answers better by reading the situation.
-- **Contract surface, not content surface.** Always-loaded files hold contracts + pointers; heavy
-  content lives in lazy-loaded skills or referenced docs.
-- **Stale vs volatile split.** Stale → fix against live source. Volatile → relocate out of doctrine.
-- **Verify, don't trust the doc about itself.** Every count / path / test-result / claim is checked
-  against reality before it's believed.
 - **Scoped files earn their place.** A folder-scoped `CLAUDE.md` exists to capture a foot-gun
   invisible from filenames, or to hold a folder-specific section split out of an over-budget root.
   If you can't state its reason in one sentence, the file shouldn't exist.
@@ -235,13 +225,7 @@ Tag each finding so the apply step knows what edit it implies:
 
 ## Multi-agent specifics
 
-The wiring this kit uses changes how a few axes apply:
-
-- **`AGENTS.md` is a symlink to `CLAUDE.md`** — never audit it as a separate file; auditing
-  `CLAUDE.md` covers it. (The wiring check in Part 1 confirms the link itself.)
-- **`.agents/skills/` is a symlink to `.claude/skills/`** — Codex/Antigravity read skills through it;
-  audit each skill once under `.claude/skills/`, never via the mirror. Part 1 confirms the link.
-- **CLAUDE.md's budget matters 3×.** It's the always-loaded file for Claude *and* (via the symlink)
-  Codex and Antigravity. Trim wins here pay off three times.
-- **Secrets compound on sync/public repos (C9).** A leaked credential in any instruction file is a
-  BLOCKER — more so if the repo syncs to cloud storage or is published.
+One rule the axes don't otherwise cover: **audit each file once through its canonical path.**
+`AGENTS.md` and `.agents/skills/` are symlinks, so auditing `CLAUDE.md` and `.claude/skills/`
+already covers them — reviewing the mirror double-counts the same content. Part 1 of the skill
+confirms both links; its Gotchas section carries the operational detail.
