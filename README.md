@@ -158,7 +158,8 @@ see them through `.agents/skills`.
 
 - Edit shared rules in `CLAUDE.md`, never in `AGENTS.md`.
 - Edit shared skills in `.claude/skills/`, never in `.agents/skills`.
-- Run `/docreview` or `python3 scripts/docreview.py` after changing instruction files or skills.
+- Run `/docreview` after changing instruction files or skills — the doctrine audit runs by
+  default. (`python3 scripts/docreview.py` alone checks only wiring + budgets.)
 - Add scoped `CLAUDE.md` files only for real folder-specific rules or foot-guns; point to root
   doctrine and keep scoped files small.
 - Read [CHANGELOG.md](CHANGELOG.md) before pulling updates from this repo into an installed project.
@@ -222,11 +223,20 @@ instead of overwriting them.
    `CLAUDE.md`, `AGENTS.md -> CLAUDE.md`, and `.agents/skills -> .claude/skills`.
 2. Audit instruction docs for size, scope, drift, broken links, and authoring quality.
 
-Run it anytime:
+Run the mechanical half anytime — the pre-commit hook runs this too:
 
 ```bash
-python3 scripts/docreview.py
+python3 scripts/docreview.py   # wiring repair + token budgets only
 ```
+
+The doctrine audit (job 2) is not scriptable — it is Part 2 of the `docreview` skill, run by an
+agent's judgment. A bare `/docreview` means a full doc review; say "wiring only" to skip the
+doctrine pass.
+
+The doctrine is aligned with current published practice — Anthropic's 2026 system-prompt cuts
+(frontier models need less scaffolding) and empirical study of real instruction files: keep them
+short, imperative, free of lint restatement, and limited to what the model can't infer from the
+repo.
 
 If an agent clobbers a symlink with a real file, `docreview` backs up the divergent content to a
 `*.clobbered-<timestamp>` file before restoring the symlink.
@@ -259,7 +269,8 @@ current working directory. Use `--scope worktree` when you explicitly want the c
 `CLAUDE.md` only when that folder has a real folder-specific convention or foot-gun, then run the
 normal wiring check.
 
-Requires Python 3.7+.
+Requires Python 3.7+ for `docreview.py`; the `codebase-audit` script requires 3.8+ (assignment
+expressions).
 
 ## `codebase-audit`
 
@@ -291,7 +302,9 @@ Copies drift. A symlink makes `AGENTS.md` read the same content as `CLAUDE.md`, 
 
 ### Can I keep private local instructions?
 
-Yes. Put machine-local preferences in `CLAUDE.local.md`; it is ignored by Git.
+Yes. Put machine-local preferences in `CLAUDE.local.md`; it is ignored by Git. Claude Code's docs
+have deprecated its auto-discovery in favor of `@` imports — add `@./CLAUDE.local.md` to
+`CLAUDE.md` so it loads on current versions.
 
 ### What about rules for one subfolder?
 

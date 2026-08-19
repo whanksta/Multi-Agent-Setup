@@ -11,7 +11,9 @@
   (a folder symlink). Author/edit skills there, never through the mirror; `docreview` maintains it.
 - Claude-only rules live in `.claude/rules/`.
 - **Never write to `AGENTS.md`** — it is a symlink; an atomic-save there clobbers the link. Always edit `CLAUDE.md`.
-- Run `/docreview` (or `python3 scripts/docreview.py`) to verify/repair this wiring and audit the docs.
+- Run `/docreview` to verify/repair this wiring **and audit the docs against doctrine**. The bare
+  script (`python3 scripts/docreview.py`) is only the mechanical half — wiring + token budgets;
+  the doctrine audit is the skill's judgment pass, not the script's.
 - A pre-commit hook runs the script automatically — enable once per clone: `git config core.hooksPath .githooks`.
 
 ## Scoped CLAUDE.md files
@@ -22,8 +24,9 @@
 - Keep root `CLAUDE.md` under 2,500 est. tokens; push heavy content into `docs/` or a skill.
   **Budget tokens, not lines** — a wide table row can cost 300+ on its own. Check with
   `python3 scripts/docreview.py tokens`.
-- Prefer deleting to adding. Opus 5 self-verifies and reads context — rules like "double-check your
-  work", restated directory trees, and dependency lists cost adherence without buying anything.
+- Prefer deleting to adding. Current frontier models self-verify and read context — rules like
+  "double-check your work", restated directory trees, and dependency lists cost adherence
+  without buying anything.
 - A must-hold-**everywhere** rule belongs in **root** `CLAUDE.md` — scoped files load only when that
   folder is touched and don't survive `/compact`.
 - **On conflict, the more deeply-nested file wins for its subtree; root holds everywhere else.**

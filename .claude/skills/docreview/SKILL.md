@@ -1,15 +1,15 @@
 ---
 name: docreview
-description: Verifies and repairs multi-agent instruction-file wiring (CLAUDE.md canonical, AGENTS.md symlink → CLAUDE.md), reports folders missing scoped CLAUDE.md/AGENTS.md files, and audits docs against doctrine. Use to check or fix AGENTS.md/CLAUDE.md consistency, find missing scoped instruction files, after any agent edited instruction files, when symlinks are clobbered, when docs look stale/bloated, or before committing instruction files or skills. Triggers - /docreview, "check doc wiring", "audit docs", "review CLAUDE.md", "doc drift".
+description: Verifies and repairs multi-agent instruction-file wiring (CLAUDE.md canonical, AGENTS.md symlink → CLAUDE.md), reports folders missing scoped CLAUDE.md/AGENTS.md files, and audits docs against doctrine. Use to check or fix AGENTS.md/CLAUDE.md consistency, find missing scoped instruction files, after any agent edited instruction files, when symlinks are clobbered, when docs look stale/bloated, or before committing instruction files or skills. A bare /docreview defaults to the full audit (wiring + doctrine); wiring-only must be explicit. Triggers - /docreview, "check doc wiring", "audit docs", "review CLAUDE.md", "doc drift".
 ---
 
 # docreview
 
 For wiring or doctrine review, run two jobs in order. **Part 1 (wiring)** is mechanical and runs
 first; after any doctrine fixes, run it again as the final check. **Part 2 (doctrine)** is a
-judgment audit — run it on request, before committing instruction-file changes, or whenever a doc
-looks bloated/stale. If the user only asks for folders missing scoped instruction files, use the
-optional missing-file inventory command instead.
+judgment audit and the **default**: a bare `/docreview` means full doc review — skip it only when
+the user explicitly says "wiring only" (or asks just for the missing-file inventory). Also run it
+before committing instruction-file changes or whenever a doc looks bloated/stale.
 
 Choose one doctrine mode after Part 1:
 

@@ -8,6 +8,46 @@ batches available once committed.
 
 Historical entries were reconstructed from Git history through `7b20a84`.
 
+## 2026-08-19
+
+### Changed
+
+- **A bare `/docreview` now means a full doc review.** The doctrine audit was opt-in-ish and
+  every automatic path (script, pre-commit hook) runs only wiring + token budgets, so in practice
+  docreview degraded to a context-limit check. Part 2 of the skill is now the default; it is
+  skipped only when the user explicitly says "wiring only". The skill's `description` frontmatter
+  states the default so it is visible at discovery time, when only the description loads.
+- CLAUDE.md and README no longer present `python3 scripts/docreview.py` as equivalent to
+  `/docreview`: the script is the mechanical half (wiring + budgets); the doctrine audit is the
+  skill's judgment pass. README's `docreview` section and Daily Workflow say so explicitly.
+- **Trimmed `doctrine.md` ~20% (6,342 → ~5,000 est. tokens)** against current published
+  practice — Anthropic's July 2026 cut of >80% of Claude Code's system prompt ("smarter models
+  need less direction"), an arXiv study of 100 real AGENTS.md/CLAUDE.md files, and HumanLayer's
+  CLAUDE.md guide. No rule was dropped: all 11 C-axes, 10 audit axes, OR5/OR8, and all 10
+  fix-classes remain. What changed:
+  - Generalized volatile model references ("Opus 5") to "current frontier models" with one dated
+    evidence cite — the principle is durable, the model name wasn't.
+  - Sharpened three axes with research findings: C1 notes bloat degrades adherence *uniformly*;
+    C3 names lint/formatter restatement as the most common real-world smell (62% of files in the
+    arXiv sample); C10 requires pointers to say when/why, not just resolve (blind references get
+    ignored).
+  - Moved measurement provenance (tokenizer experiments, per-tier line estimates) out of the
+    doctrine body — the operative rules stay, the history lives in this changelog.
+  - Folded "Multi-agent specifics" into a closing line (it restated the skill's Gotchas — its
+    own OR5 rule) and dropped redundant verify commands for axes that share one.
+
+### Fixed
+
+- Refreshed `doctrine.md`'s self-measurements, which had rotted inside the 2026-08-03 batch:
+  `skill-axes.md` measures ~31 non-blank lines / ~2,200 est. tokens (was "30 / ~2,100"), and
+  doctrine.md's widest table row costs ~270 tokens (was "~330").
+- README's Python floor is now per-script: `docreview.py` requires 3.7+ (verified — it uses
+  `from __future__ import annotations` and no 3.8+ syntax), while `codebase-audit` requires 3.8+
+  (assignment expressions). The bare "Requires Python 3.7+" sat where readers could take it for
+  the whole kit.
+- README's local-instructions FAQ now notes Claude Code deprecated `CLAUDE.local.md`
+  auto-discovery in favor of `@` imports — add `@./CLAUDE.local.md` to `CLAUDE.md`.
+
 ## 2026-08-03
 
 ### Changed
