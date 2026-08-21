@@ -95,8 +95,9 @@ https://github.com/whanksta/Multi-Agent-Setup.
 5. STAMP THE VERSION: copy /tmp/mas/VERSION into my repo as .claude/.mas-version so the next update
    knows its baseline.
 
-6. Run python3 scripts/docreview.py, confirm it prints docreview: PASS, then summarize what changed
-   and any adoption notes from CHANGELOG.md.
+6. Run python3 scripts/docreview.py from my repo root — the copy just installed, not the /tmp/mas
+   clone's script (that one audits the kit itself, not my repo). Confirm it prints docreview: PASS,
+   then summarize what changed and any adoption notes from CHANGELOG.md.
 ```
 
 No `git`? Download the source zip instead, then use it as `SRC` anywhere the prompt says `/tmp/mas`:

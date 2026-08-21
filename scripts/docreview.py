@@ -584,7 +584,12 @@ def resolve_scope_root(scope: str, custom_path: str | None, cwd: Path) -> Path:
     if scope == "path":
         if not custom_path:
             raise ValueError("--scope path requires --path")
-        return Path(custom_path).expanduser().resolve()
+        custom_root = Path(custom_path).expanduser().resolve()
+        if not custom_root.is_dir():
+            # A missing root must fail loudly: os.walk over nothing looks
+            # like full coverage, so a silent pass would certify air.
+            raise ValueError(f"scope path is not an existing directory: {custom_path}")
+        return custom_root
 
     raise ValueError(f"Unsupported scope: {scope}")
 

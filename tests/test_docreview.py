@@ -189,6 +189,56 @@ class MissingInstructionFileReportTests(unittest.TestCase):
             result.stdout,
         )
 
+    def test_missing_command_rejects_nonexistent_scope_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT_PATH),
+                    "missing",
+                    "--scope",
+                    "path",
+                    "--path",
+                    str(root / "does-not-exist"),
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 2, result.stderr + result.stdout)
+        self.assertIn("scope path is not an existing directory", result.stderr)
+        self.assertNotIn("every directory in scope has", result.stdout)
+
+    def test_missing_command_rejects_file_scope_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "notes.md"
+            target.write_text("not a directory\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT_PATH),
+                    "missing",
+                    "--scope",
+                    "path",
+                    "--path",
+                    str(target),
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 2, result.stderr + result.stdout)
+        self.assertIn("scope path is not an existing directory", result.stderr)
+        self.assertNotIn("every directory in scope has", result.stdout)
+
     def test_missing_command_defaults_to_script_root_without_git(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

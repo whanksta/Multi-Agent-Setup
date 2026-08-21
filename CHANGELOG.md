@@ -8,6 +8,27 @@ batches available once committed.
 
 Historical entries were reconstructed from Git history through `7b20a84`.
 
+## 2026-08-21
+
+### Fixed
+
+- **`docreview.py` no longer passes silently on a nonexistent `--scope path` root.** It now exits 2
+  with "scope path is not an existing directory", matching the other scope errors. Previously
+  `missing --scope path --path <nonexistent>` walked nothing and printed "every directory in scope
+  has CLAUDE.md and AGENTS.md" with exit 0 — a check that measured nothing while looking like a
+  pass. A relative `--path` resolved from the wrong working directory hit the same hole, and a path
+  pointing at a regular file did too. `check` on a bad scope path now also exits 2 with the scope
+  error instead of exit 1's misleading "CLAUDE.md (canonical) is missing".
+- The adoption prompt's verification step (README step 6) now says to run the target repo's own
+  `scripts/docreview.py` from the target root. Running the `/tmp/mas` clone's copy audits the kit
+  itself and exits 0 regardless of the target's wiring — the first output line names the audited
+  root, but the exit code alone certified nothing.
+
+### Adoption Notes
+
+- Replace `scripts/docreview.py` to adopt the scope-path validation. The step-6 change is
+  README-side guidance for future installs; no other kit files changed.
+
 ## 2026-08-19
 
 ### Changed
