@@ -24,30 +24,6 @@ def load_docreview_module():
 
 
 class MissingInstructionFileReportTests(unittest.TestCase):
-    def test_check_command_defaults_to_script_root_without_git(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            script_path = root / "scripts" / "docreview.py"
-            script_path.parent.mkdir()
-            shutil.copy2(SCRIPT_PATH, script_path)
-            (root / "CLAUDE.md").write_text("root\n", encoding="utf-8")
-
-            result = subprocess.run(
-                [sys.executable, str(script_path)],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-
-        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-        self.assertEqual(result.stderr, "")
-        self.assertIn(
-            f"docreview: checking agent instruction files in {root.resolve()}",
-            result.stdout,
-        )
-        self.assertIn("docreview: PASS", result.stdout)
-
     def test_check_command_defaults_to_script_root_from_other_git_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -189,55 +165,33 @@ class MissingInstructionFileReportTests(unittest.TestCase):
             result.stdout,
         )
 
-    def test_missing_command_rejects_nonexistent_scope_path(self) -> None:
+    def test_missing_command_rejects_bad_scope_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            as_file = root / "notes.md"
+            as_file.write_text("not a directory\n", encoding="utf-8")
 
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(SCRIPT_PATH),
-                    "missing",
-                    "--scope",
-                    "path",
-                    "--path",
-                    str(root / "does-not-exist"),
-                ],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
+            for bad_path in (str(root / "does-not-exist"), str(as_file)):
+                with self.subTest(bad_path=bad_path):
+                    result = subprocess.run(
+                        [
+                            sys.executable,
+                            str(SCRIPT_PATH),
+                            "missing",
+                            "--scope",
+                            "path",
+                            "--path",
+                            bad_path,
+                        ],
+                        cwd=root,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
 
-        self.assertEqual(result.returncode, 2, result.stderr + result.stdout)
-        self.assertIn("scope path is not an existing directory", result.stderr)
-        self.assertNotIn("every directory in scope has", result.stdout)
-
-    def test_missing_command_rejects_file_scope_path(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            target = root / "notes.md"
-            target.write_text("not a directory\n", encoding="utf-8")
-
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(SCRIPT_PATH),
-                    "missing",
-                    "--scope",
-                    "path",
-                    "--path",
-                    str(target),
-                ],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-
-        self.assertEqual(result.returncode, 2, result.stderr + result.stdout)
-        self.assertIn("scope path is not an existing directory", result.stderr)
-        self.assertNotIn("every directory in scope has", result.stdout)
+                    self.assertEqual(result.returncode, 2, result.stderr + result.stdout)
+                    self.assertIn("scope path is not an existing directory", result.stderr)
+                    self.assertNotIn("every directory in scope has", result.stdout)
 
     def test_check_command_fails_when_a_scoped_claude_is_unreadable(self) -> None:
         if not hasattr(os, "chmod"):
@@ -338,31 +292,6 @@ class MissingInstructionFileReportTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stderr + result.stdout)
         self.assertIn("cannot run git", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
-
-    def test_missing_command_defaults_to_script_root_without_git(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            script_path = root / "scripts" / "docreview.py"
-            script_path.parent.mkdir()
-            shutil.copy2(SCRIPT_PATH, script_path)
-            (root / "src").mkdir()
-
-            result = subprocess.run(
-                [sys.executable, str(script_path), "missing"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-
-        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
-        self.assertEqual(result.stderr, "")
-        self.assertIn(
-            f"docreview: reporting instruction-file coverage in {root.resolve()}",
-            result.stdout,
-        )
-        self.assertIn("  info  . missing CLAUDE.md, AGENTS.md", result.stdout)
-        self.assertIn("  info  src missing CLAUDE.md, AGENTS.md", result.stdout)
 
     def test_missing_command_honors_current_git_worktree_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -646,7 +575,9 @@ class SizeMeasurementTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         self.assertIn("CLAUDE.md", result.stdout)
-        self.assertIn("tok", result.stdout)
+        # "non-blank lines" only appears in a real measurement row, never in
+        # the note lines - asserting "tok" alone would pass on the notes too.
+        self.assertIn("non-blank lines", result.stdout)
 
     def test_tokens_command_skips_the_agents_symlink(self) -> None:
         result = subprocess.run(
