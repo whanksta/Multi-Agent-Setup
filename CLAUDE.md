@@ -1,4 +1,4 @@
-# <Project> — Agent Operating Rules
+# Multi-Agent-Setup — Agent Operating Rules
 
 > Starter template. Replace the **Conventions** section with your project's real rules. Keep the
 > **Canonical instructions file** section — it's the multi-agent wiring this kit provides.

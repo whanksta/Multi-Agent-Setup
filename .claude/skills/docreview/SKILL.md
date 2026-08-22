@@ -78,6 +78,7 @@ python3 scripts/docreview.py missing --scope path --path path/to/subtree
 - `--scope worktree` reports the current Git worktree and fails when the current directory is not
   inside Git.
 - `--scope path --path ...` reports an arbitrary custom subtree without requiring root wiring there.
+
 The output is a prompt to consider whether a scoped `CLAUDE.md` is warranted, not a mandate to add
 one.
 

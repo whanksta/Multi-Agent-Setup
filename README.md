@@ -1,4 +1,4 @@
-# MultiAgentSetup
+# Multi-Agent-Setup
 
 Two things every multi-agent repo needs, wired once: **one canonical instruction system** that
 Claude Code, Codex, and Antigravity all read, and **`codebase-audit`**, a deterministic structural-
@@ -28,7 +28,7 @@ Different coding agents read different instruction files. Claude Code reads `CLA
 Antigravity read `AGENTS.md`; skills live in different tool-specific folders. If those files are
 copied by hand, they drift.
 
-MultiAgentSetup makes `CLAUDE.md` the single source of truth, exposes it to other agents through an
+Multi-Agent-Setup makes `CLAUDE.md` the single source of truth, exposes it to other agents through an
 `AGENTS.md` symlink, shares skills through a folder symlink, and ships `docreview` to verify and
 repair the wiring.
 
@@ -40,7 +40,7 @@ This kit ships two core capabilities:
    symlinks so every agent reads the same bytes; `docreview` verifies and repairs that wiring and
    audits the docs for drift.
 2. **`codebase-audit`** — a deterministic, repo-agnostic structural-health signal. It decomposes
-   size and layers in the git-temporal signals (churn, hotspot, temporal coupling) that actually
+   size, and layers in the git-temporal signals (churn, hotspot, temporal coupling) that actually
    predict where defects accrue, so an agent gets the wide quantitative picture before it judges
    what to refactor.
 
@@ -58,7 +58,10 @@ situation you're in and adapts.
 
 Click **[Use this template](https://github.com/whanksta/Multi-Agent-Setup/generate)**, edit
 `CLAUDE.md` with your project's real rules, then run `python3 scripts/docreview.py` and expect
-`docreview: PASS`.
+`docreview: PASS`. The template also ships the kit's `tests/`, `README.md`, `CHANGELOG.md`, and
+`LICENSE` — keep or delete them freely (they are source-repo artifacts, not wiring). When you
+later update via the one-prompt flow, the shipped root `VERSION` is your baseline: the agent
+stamps `.claude/.mas-version` from it on the first update.
 
 ### Existing or installed repo (one prompt)
 
@@ -66,7 +69,7 @@ Paste this into your agent from inside the repo you want to set up or update. Th
 a fresh adoption, a repo that already has other agent files, and an update of an existing install:
 
 ```text
-Set up (or update) this repo with the MultiAgentSetup kit from
+Set up (or update) this repo with the Multi-Agent-Setup kit from
 https://github.com/whanksta/Multi-Agent-Setup.
 
 1. GET THE EXACT FILES. Clone the source so you have its real bytes — do not retype scripts from a
@@ -77,17 +80,22 @@ https://github.com/whanksta/Multi-Agent-Setup.
 
 2. DETECT THE SITUATION:
    - My repo already has scripts/docreview.py  ->  UPDATE: read .claude/.mas-version, then apply
-     only the CHANGELOG batches dated newer than it.
+     only the CHANGELOG batches dated newer than it. If .claude/.mas-version is missing but root
+     VERSION exists (template-button adoption), use VERSION as the baseline and stamp
+     .claude/.mas-version from it.
    - My repo has other instruction files (a real AGENTS.md, .cursorrules, GEMINI.md, scattered rule
      docs)  ->  PRE-CONSOLIDATE: fold their active rules into one canonical CLAUDE.md, dedupe, and
-     preserve my conventions; then remove the redundant copies.
+     preserve my conventions; then remove the redundant copies — agent-instruction files only
+     (the real AGENTS.md, .cursorrules, GEMINI.md, rule docs whose content you folded in). Never
+     delete human-facing docs (README, docs/ handbooks); leave them in place.
    - Neither  ->  FRESH install.
 
 3. REPLICATE KIT-OWNED FILES EXACTLY from /tmp/mas (see the Adoption File Policy table for the full
    list + per-file action): scripts/docreview.py, .claude/skills/docreview/,
-   .claude/skills/codebase-audit/, .githooks/pre-commit, and VERSION. Create AGENTS.md as a relative
+   .claude/skills/codebase-audit/, and .githooks/pre-commit. Create AGENTS.md as a relative
    symlink to CLAUDE.md and .agents/skills as a folder symlink to .claude/skills. Add the needed
-   .gitignore entries without removing unrelated ones.
+   .gitignore entries (CLAUDE.local.md, .claude/settings.local.json, __pycache__/, *.py[cod],
+   *.clobbered-*, .DS_Store) without removing unrelated ones.
 
 4. MERGE ONLY ROOT CLAUDE.md — it is my repo's master instruction file. Blend the kit's wiring
    sections with my existing project rules; never overwrite them.
@@ -110,6 +118,13 @@ SRC=/tmp/Multi-Agent-Setup-main
 
 Then follow steps 2–6, replacing `/tmp/mas` with `$SRC`.
 
+**Zip caveat:** zip extraction stores symlinks as plain text files — `AGENTS.md` becomes a 9-byte
+file containing `CLAUDE.md`, and `.agents/skills` likewise. Never copy those two paths from a zip
+source; create them as symlinks per the Adoption File Policy (the manual-install `ln -snf` step or
+`docreview` itself does this). The GitHub zip also extracts under a wrapper folder named after the
+ref (`Multi-Agent-Setup-main` for `main`; a tag zip differs), so check what `$SRC` actually
+contains.
+
 ### Adoption File Policy
 
 The agent's per-file contract. "Copy exactly" means byte-for-byte from the clone in step 1.
@@ -121,7 +136,8 @@ The agent's per-file contract. "Copy exactly" means byte-for-byte from the clone
 | `.claude/skills/docreview/` | Copy exactly into the canonical skill location. |
 | `.claude/skills/codebase-audit/` | Copy exactly — it is a core part of the kit, not an optional add-on. |
 | `.githooks/pre-commit` | Copy exactly (enable with `git config core.hooksPath .githooks`). |
-| `VERSION` | Copy its value into the target as `.claude/.mas-version` to record the adopted version. |
+| `VERSION` | Copy its value into the target as `.claude/.mas-version` to record the adopted version. Do not plant a root `VERSION` in the target. |
+| `tests/` | Source-repo regression suite for the scripts. Do not copy during adoption; template-button repos inherit it and may keep or delete it. |
 | `.gitignore` | Add required entries such as `CLAUDE.local.md`, `*.clobbered-*`, `__pycache__/`, and `*.py[cod]`; preserve unrelated target entries. |
 | `CLAUDE.md` | Merge/blend wiring guidance with existing project instructions; never overwrite project rules blindly. |
 | `AGENTS.md` | Create as a relative symlink to `CLAUDE.md` after consolidating existing agent rules. |
@@ -136,6 +152,7 @@ The agent's per-file contract. "Copy exactly" means byte-for-byte from the clone
 | `.claude/skills/` | Canonical shared skills directory. |
 | `.agents/skills` | Folder symlink to `.claude/skills`. |
 | `scripts/docreview.py` | Verifies and repairs wiring; checks instruction-file size budgets in estimated tokens. |
+| `.githooks/pre-commit` | Optional Git hook running `docreview` (gate) + `codebase-audit --staged` (advisory) before each commit. |
 | `.claude/skills/docreview/` | Agent skill for wiring checks and doc-doctrine review. |
 | `.claude/skills/codebase-audit/` | Core agent skill + script for structural hotspot/churn signals (advisory, not a gate). |
 | `VERSION` | Kit version string; copied into an adopting repo as `.claude/.mas-version`. |
@@ -303,9 +320,9 @@ Copies drift. A symlink makes `AGENTS.md` read the same content as `CLAUDE.md`, 
 
 ### Can I keep private local instructions?
 
-Yes. Put machine-local preferences in `CLAUDE.local.md`; it is ignored by Git. Claude Code's docs
-have deprecated its auto-discovery in favor of `@` imports — add `@./CLAUDE.local.md` to
-`CLAUDE.md` so it loads on current versions.
+Yes. Put machine-local preferences in `CLAUDE.local.md`; it is ignored by Git. Current Claude Code
+versions load it automatically; if yours doesn't, add `@./CLAUDE.local.md` to `CLAUDE.md` so it
+loads as an explicit import.
 
 ### What about rules for one subfolder?
 

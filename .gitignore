@@ -7,6 +7,7 @@ __pycache__/
 
 # Local agent prefs (Claude reads this but it's machine-local)
 CLAUDE.local.md
+.claude/settings.local.json
 
 # docreview backups (clobbered symlink snapshots: AGENTS.md, .agents/skills, …)
 *.clobbered-*

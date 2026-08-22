@@ -19,15 +19,63 @@ Historical entries were reconstructed from Git history through `7b20a84`.
   pass. A relative `--path` resolved from the wrong working directory hit the same hole, and a path
   pointing at a regular file did too. `check` on a bad scope path now also exits 2 with the scope
   error instead of exit 1's misleading "CLAUDE.md (canonical) is missing".
+- **`docreview.py` fails loudly on unreadable docs and directories** (same failure class, found in
+  a pre-public audit): an unreadable `CLAUDE.md`/rules file used to measure 0 tokens and PASS the
+  budget check; an unreadable directory used to be skipped by `os.walk` while `missing` still
+  claimed "every directory in scope". Now `check` exits 1 with "budget/wiring UNCHECKED" lines,
+  `missing` prints "coverage there is UNKNOWN" instead of the all-clear, and `tokens` marks the
+  gap and exits 1.
+- **`docreview.py` budget math hardened:** an unclosed `<!--` comment no longer zeroes the rest of
+  the file (malformed markdown is charged, not dropped); a fence line with trailing text no longer
+  closes a code block (CommonMark closers are bare); the circular-import guard now catches
+  `@AGENTS.md`, `@/AGENTS.md`, indented, and list-item forms, not just `@./AGENTS.md`;
+  `--scope worktree` with no git binary on PATH exits 2 with a message instead of a traceback; a
+  missing or symlinked `.claude/skills` prints a WARN instead of silently skipping the mirror
+  check.
+- **`audit.py` honesty fixes:** non-ASCII filenames are no longer silently dropped (git's default
+  path quoting corrupted them; now `core.quotePath=off` for `ls-files` and both diff commands);
+  unreadable files are counted and surfaced in the report's Skipped line and `--json` meta;
+  `--path src` no longer also matches `srcx/` (prefix match now requires a boundary); `--changed`
+  on an unborn HEAD (or when git fails) says "could not read the diff" instead of "0 source
+  file(s) changed — all within normal ranges".
+- **Windows pre-commit support:** added `.gitattributes` (the hook must check out with LF — Git
+  for Windows defaults to CRLF, which kills the shebang), and the hook now resolves
+  `python3`/`python`/`py` instead of hardcoding `python3` (python.org Windows installs expose
+  `python`/`py` only).
 - The adoption prompt's verification step (README step 6) now says to run the target repo's own
   `scripts/docreview.py` from the target root. Running the `/tmp/mas` clone's copy audits the kit
   itself and exits 0 regardless of the target's wiring — the first output line names the audited
   root, but the exit code alone certified nothing.
 
+### Changed
+
+- **Adoption flow gaps closed (README):** the update path now has a documented fallback when
+  `.claude/.mas-version` is missing but root `VERSION` exists (template-button adoptions); the
+  no-git zip fallback now warns that zip extraction stores symlinks as plain text files (never
+  copy `AGENTS.md`/`.agents/skills` from a zip source) and that the wrapper folder name follows
+  the ref; the PRE-CONSOLIDATE step now scopes "remove the redundant copies" to agent-instruction
+  files only — never human-facing docs; step 3 no longer lists `VERSION` under "replicate exactly"
+  (step 5's `.claude/.mas-version` stamp is its only action); the Adoption File Policy gains a
+  `tests/` row (source-repo regression suite, not for adoption); the gitignore entry list in step 3
+  is now explicit.
+- **README corrections:** the CLAUDE.local.md FAQ no longer claims auto-discovery is deprecated
+  (the live Claude Code docs present it as current; the `@` import is now the fallback, not the
+  requirement); display name unified as "Multi-Agent-Setup"; a garbled sentence in Two Pillars
+  fixed; `.githooks/pre-commit` added to the What You Get table; the template quick-start says
+  what to do with inherited `tests/`/`README`/`CHANGELOG`/`LICENSE`.
+- `CLAUDE.md` title now names the real repo instead of the `# <Project>` placeholder (the
+  template guidance block is unchanged); `doctrine.md`'s self-measurements refreshed (31
+  non-blank lines; widest row ~230 est. tokens); the `docreview` SKILL.md list/comment separation
+  fixed; `.gitignore` now ignores `.claude/settings.local.json` (Claude Code local permissions).
+
 ### Adoption Notes
 
-- Replace `scripts/docreview.py` to adopt the scope-path validation. The step-6 change is
-  README-side guidance for future installs; no other kit files changed.
+- Replace `scripts/docreview.py`, `.claude/skills/codebase-audit/scripts/audit.py`,
+  `.githooks/pre-commit`, and `.claude/skills/docreview/` (SKILL.md + reference/doctrine.md), and
+  add the new `.gitattributes`. Re-blend root `CLAUDE.md` (title change only). Append the
+  `.claude/settings.local.json` line to your `.gitignore`.
+- The README changes are source-side guidance for future installs and updates; installed repos
+  have no kit README and can skip them.
 
 ## 2026-08-19
 
@@ -68,6 +116,17 @@ Historical entries were reconstructed from Git history through `7b20a84`.
   the whole kit.
 - README's local-instructions FAQ now notes Claude Code deprecated `CLAUDE.local.md`
   auto-discovery in favor of `@` imports — add `@./CLAUDE.local.md` to `CLAUDE.md`.
+  (Superseded 2026-08-21: the live docs present auto-discovery as current; the FAQ now
+  recommends the `@` import only as a fallback.)
+
+### Adoption Notes
+
+- Replace `scripts/docreview.py`, `.claude/skills/docreview/SKILL.md`, and
+  `.claude/skills/docreview/reference/doctrine.md`; re-blend root `CLAUDE.md` — the
+  "Generalized volatile model references" wording change applies to `CLAUDE.md` too, not only
+  `doctrine.md`.
+- The README bullets above are source-repo-only; installed repos have no kit README and can
+  skip them.
 
 ## 2026-08-03
 

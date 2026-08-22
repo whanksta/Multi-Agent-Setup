@@ -4,7 +4,15 @@
 # Exits non-zero on failure OR after an auto-repair (stage the repair, commit again).
 before="$(git status --porcelain=v1)"
 
-python3 scripts/docreview.py || exit $?
+# python.org Windows installs expose `python`/`py`, not `python3` - resolve
+# whichever interpreter exists so the hook doesn't die with exit 127.
+PY="$(command -v python3 || command -v python || command -v py || true)"
+if [ -z "$PY" ]; then
+  echo "pre-commit: no python interpreter found (python3/python/py)." >&2
+  exit 1
+fi
+
+"$PY" scripts/docreview.py || exit $?
 
 after="$(git status --porcelain=v1)"
 if [ "$before" != "$after" ]; then
@@ -17,4 +25,4 @@ fi
 # Runs only after the docreview gate above passes. NEVER add an exit/threshold
 # here: codebase-audit is signal, not a gate (see its SKILL.md). It always
 # exits 0 so it can flag a touched outlier without ever stopping a commit.
-python3 .claude/skills/codebase-audit/scripts/audit.py --staged 2>/dev/null || true
+"$PY" .claude/skills/codebase-audit/scripts/audit.py --staged 2>/dev/null || true

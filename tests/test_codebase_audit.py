@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -117,6 +118,54 @@ class CodebaseAuditScriptTests(unittest.TestCase):
 
         self.assertIn("codebase-audit · 1 source file(s) changed", result.stdout)
         self.assertIn("advisory, non-blocking", result.stdout)
+
+    def test_non_ascii_filenames_are_not_dropped(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            init_repo(repo)
+            write_file(repo, "ünïcødé.py", "def fancy():\n    return 1\n")
+            write_file(repo, "plain.py", "def plain():\n    return 2\n")
+            commit_all(repo, "initial")
+
+            result = self.run_audit(repo, "--json")
+
+        payload = json.loads(result.stdout)
+        self.assertEqual(
+            sorted(file["path"] for file in payload["files"]),
+            ["plain.py", "ünïcødé.py"],
+        )
+
+    def test_unreadable_files_are_counted_not_hidden(self) -> None:
+        if not hasattr(os, "chmod"):
+            self.skipTest("chmod unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            init_repo(repo)
+            write_file(repo, "src/a.py", "def a():\n    return 1\n")
+            write_file(repo, "src/big.py", "def big():\n    return 2\n")
+            commit_all(repo, "initial")
+            locked = repo / "src" / "big.py"
+            locked.chmod(0)
+
+            try:
+                result = self.run_audit(repo, "--json")
+            finally:
+                locked.chmod(0o644)
+
+        payload = json.loads(result.stdout)
+        self.assertEqual([file["path"] for file in payload["files"]], ["src/a.py"])
+        self.assertGreaterEqual(payload["meta"]["unreadable"], 1)
+
+    def test_path_scope_requires_directory_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            write_file(repo, "src/one.py", "def one():\n    return 1\n")
+            write_file(repo, "srcx/one.py", "def one():\n    return 1\n")
+
+            result = self.run_audit(repo, "--json", "--path", "src")
+
+        payload = json.loads(result.stdout)
+        self.assertEqual([file["path"] for file in payload["files"]], ["src/one.py"])
 
     def test_temporal_coupling_reports_files_changed_together(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -206,8 +206,8 @@ def discover(repo: Path, paths, only_lang):
             if p.is_file() and not any(part in IGNORE_DIRS for part in p.parts):
                 files.append(str(p.relative_to(repo)))
     out = []
-    cov = {"skipped_big": 0, "generated": 0, "by_lang": defaultdict(int),
-           "roots": set(), "unknown_ext": 0}
+    cov = {"skipped_big": 0, "generated": 0, "unreadable": 0,
+           "by_lang": defaultdict(int), "roots": set(), "unknown_ext": 0}
     for rel in files:
         relp = rel.replace("\\", "/")
         lang = EXT_TO_LANG.get(Path(rel).suffix)
@@ -216,7 +216,7 @@ def discover(repo: Path, paths, only_lang):
             continue
         if only_lang and lang != only_lang:
             continue
-        if paths and not any(relp.startswith(pre) for pre in paths):
+        if paths and not any(relp == pre or relp.startswith(pre + "/") for pre in paths):
             continue
         ap = repo / rel
         try:
@@ -225,6 +225,7 @@ def discover(repo: Path, paths, only_lang):
                 continue
             head = ap.open("r", encoding="utf-8", errors="replace").read(2048)
         except OSError:
+            cov["unreadable"] += 1
             continue
         if _looks_generated(head):
             cov["generated"] += 1
@@ -238,7 +239,10 @@ def discover(repo: Path, paths, only_lang):
 def git_tree(repo: Path):
     try:
         out = subprocess.run(
-            ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+            # quotePath=off: git quotes non-ASCII paths ("\303\274n...") by
+            # default, which corrupts the suffix and silently drops the file.
+            ["git", "-c", "core.quotePath=off", "ls-files",
+             "--cached", "--others", "--exclude-standard"],
             cwd=repo, capture_output=True, text=True, timeout=60)
         return [l for l in out.stdout.splitlines() if l.strip()] if out.returncode == 0 else None
     except (subprocess.SubprocessError, OSError):
@@ -523,6 +527,8 @@ def render_md(recs, cov, since_days, commits, coupling, top):
         skip.append(f"{cov['generated']} generated")
     if cov["skipped_big"]:
         skip.append(f"{cov['skipped_big']} file(s) >{MAX_FILE_BYTES // 1000}KB")
+    if cov["unreadable"]:
+        skip.append(f"{cov['unreadable']} unreadable")
     if skip:
         L.append(f"- Skipped: {'; '.join(skip)}")
     L.append("")
@@ -582,13 +588,16 @@ def changed_files(repo, staged):
     """Files to spotlight: the staged diff (pre-commit, the commit being made) or
     HEAD's commit (post-hoc). staged=True has no churn self-inflation since the
     commit doesn't exist yet."""
-    cmd = (["git", "diff", "--cached", "--name-only"] if staged
-           else ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", "HEAD"])
+    cmd = (["git", "-c", "core.quotePath=off", "diff", "--cached", "--name-only"] if staged
+           else ["git", "-c", "core.quotePath=off", "diff-tree", "--no-commit-id",
+                 "--name-only", "-r", "--root", "HEAD"])
     try:
         out = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, timeout=30)
-        return [l.strip() for l in out.stdout.splitlines() if l.strip()] if out.returncode == 0 else []
+        if out.returncode != 0:
+            return None
+        return [l.strip() for l in out.stdout.splitlines() if l.strip()]
     except (subprocess.SubprocessError, OSError):
-        return []
+        return None
 
 
 def outlier_reasons(r):
@@ -607,6 +616,8 @@ def outlier_reasons(r):
 
 
 def render_changed(recs, changed):
+    if changed is None:
+        return "codebase-audit · could not read the diff (git unavailable or failed) - no advisory"
     by_path = {r.path: r for r in recs}
     src = [by_path[p] for p in changed if p in by_path]
     flagged = [(r, rs) for r in src if (rs := outlier_reasons(r))]
@@ -651,7 +662,13 @@ def main():
     paths = [p.replace("\\", "/").rstrip("/") for p in (args.path or [])]
 
     found, cov = discover(repo, paths, args.lang)
-    recs = [r for rel, lang in found if (r := analyze_file(repo, rel, lang))]
+    recs = []
+    for rel, lang in found:
+        rec = analyze_file(repo, rel, lang)
+        if rec is None:
+            cov["unreadable"] += 1
+        else:
+            recs.append(rec)
     if not recs:
         sys.exit("No source files found. Is this a git repo? Try --path or --repo.")
 
@@ -685,7 +702,7 @@ def main():
             "files": [vars(r) for r in recs], "coupling": coupling,
             "meta": {"since_days": args.since_days, "commits": commits,
                      "languages": dict(cov["by_lang"]), "generated": cov["generated"],
-                     "skipped_big": cov["skipped_big"]},
+                     "skipped_big": cov["skipped_big"], "unreadable": cov["unreadable"]},
         }, indent=2, default=str))
     else:
         print(render_md(recs, cov, args.since_days, commits, coupling, args.top))

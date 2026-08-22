@@ -138,7 +138,7 @@ class MissingInstructionFileReportTests(unittest.TestCase):
             (root / ".git").mkdir()
             (root / ".git" / "hooks").mkdir()
 
-            gaps = list(docreview.iter_instruction_file_gaps(root))
+            gaps = list(docreview.iter_instruction_file_gaps(root, []))
 
         self.assertEqual(
             [
@@ -239,6 +239,106 @@ class MissingInstructionFileReportTests(unittest.TestCase):
         self.assertIn("scope path is not an existing directory", result.stderr)
         self.assertNotIn("every directory in scope has", result.stdout)
 
+    def test_check_command_fails_when_a_scoped_claude_is_unreadable(self) -> None:
+        if not hasattr(os, "chmod"):
+            self.skipTest("chmod unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "CLAUDE.md").write_text("root\n", encoding="utf-8")
+            (root / "AGENTS.md").symlink_to("CLAUDE.md")
+            scoped = root / "pkg" / "CLAUDE.md"
+            scoped.parent.mkdir()
+            scoped.write_text("x" * 20_000, encoding="utf-8")
+            (root / "pkg" / "AGENTS.md").symlink_to("CLAUDE.md")
+            scoped.chmod(0)
+
+            try:
+                result = subprocess.run(
+                    [sys.executable, str(script_path)],
+                    cwd=root,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+            finally:
+                scoped.chmod(0o644)
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("could not be read - budget UNCHECKED", result.stdout)
+        self.assertNotIn("docreview: PASS", result.stdout)
+
+    def test_missing_command_warns_on_unscannable_directory(self) -> None:
+        if not hasattr(os, "chmod"):
+            self.skipTest("chmod unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "CLAUDE.md").write_text("root\n", encoding="utf-8")
+            (root / "AGENTS.md").symlink_to("CLAUDE.md")
+            locked = root / "locked"
+            locked.mkdir()
+            (locked / "CLAUDE.md").write_text("never seen\n", encoding="utf-8")
+            locked.chmod(0)
+
+            try:
+                result = subprocess.run(
+                    [sys.executable, str(script_path), "missing"],
+                    cwd=root,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+            finally:
+                locked.chmod(0o755)
+
+        self.assertIn("coverage there is UNKNOWN", result.stdout)
+        self.assertNotIn("every directory in scope has", result.stdout)
+
+    def test_check_command_fails_on_circular_import_variants(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "CLAUDE.md").write_text("rules\n\n- @AGENTS.md\n", encoding="utf-8")
+            (root / "AGENTS.md").symlink_to("CLAUDE.md")
+
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("circular", result.stdout)
+
+    def test_worktree_scope_without_git_binary_exits_cleanly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            empty_bin = Path(tmp) / "bin"
+            empty_bin.mkdir()
+            env = dict(os.environ)
+            env["PATH"] = str(empty_bin)
+
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT_PATH), "missing", "--scope", "worktree"],
+                cwd=tmp,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 2, result.stderr + result.stdout)
+        self.assertIn("cannot run git", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_missing_command_defaults_to_script_root_without_git(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -332,6 +432,41 @@ class VersionStampTests(unittest.TestCase):
 
 
 class SizeMeasurementTests(unittest.TestCase):
+    def test_unclosed_html_comment_is_charged_not_dropped(self) -> None:
+        docreview = load_docreview_module()
+
+        loaded = docreview.strip_unloaded(
+            "BODY ONE\n<!-- never closed\nBODY TWO\nBODY THREE\n"
+        )
+        self.assertIn("BODY ONE", loaded)
+        self.assertIn("BODY TWO", loaded)
+        self.assertIn("BODY THREE", loaded)
+
+        closed = docreview.strip_unloaded("BODY ONE\n<!-- closed -->\nBODY TWO\n")
+        self.assertNotIn("closed", closed)
+        self.assertIn("BODY TWO", closed)
+
+    def test_fence_line_with_trailing_text_does_not_close_the_fence(self) -> None:
+        docreview = load_docreview_module()
+
+        loaded = docreview.strip_unloaded(
+            "\n".join(
+                [
+                    "```python",
+                    "code line",
+                    "``` trailing",
+                    "<!-- secret -->",
+                    "```",
+                    "after",
+                    "",
+                ]
+            )
+        )
+        # The ```-with-trailing-text line is an opener, not a closer, so the
+        # comment inside the fence is literal content and must be charged.
+        self.assertIn("<!-- secret -->", loaded)
+        self.assertIn("after", loaded)
+
     def test_long_lines_are_charged_for_their_real_cost(self) -> None:
         """The bug this replaced: one huge line counted as 1 and passed."""
         docreview = load_docreview_module()

@@ -54,6 +54,10 @@ FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
 # direction for a budget gate.
 YAML_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*\s*:")
 
+# An @-import of AGENTS.md in any common shape - bare, ./, /, indented, or a
+# list item - is circular: AGENTS.md is a symlink back to CLAUDE.md itself.
+CIRCULAR_IMPORT_RE = re.compile(r"^\s*(?:[-*+]\s*)?@\.?/?AGENTS\.md\b")
+
 # CHANGELOG batch headings the adoption flow compares against .claude/.mas-version.
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -121,6 +125,10 @@ def strip_unloaded(text: str, *, drop_frontmatter: bool = True) -> str:
     kept: list[str] = []
     fence: tuple[str, int] | None = None
     in_comment = False
+    # Lines swallowed by a comment so far. If the comment never closes, the
+    # construct is malformed markdown and the content is charged, not dropped -
+    # under-counting is the dangerous direction for a budget gate.
+    pending: list[str] = []
 
     for raw_line in lines[start:]:
         line = raw_line
@@ -128,7 +136,9 @@ def strip_unloaded(text: str, *, drop_frontmatter: bool = True) -> str:
         if in_comment:
             _, closed, tail = line.partition("-->")
             if not closed:
+                pending.append(raw_line)
                 continue
+            pending.clear()
             in_comment = False
             line = tail
 
@@ -139,6 +149,7 @@ def strip_unloaded(text: str, *, drop_frontmatter: bool = True) -> str:
                 _, closed, tail = line.partition("-->")
                 if not closed:
                     in_comment = True
+                    pending.append(raw_line)
                     break
                 line = tail
             if in_comment:
@@ -150,7 +161,14 @@ def strip_unloaded(text: str, *, drop_frontmatter: bool = True) -> str:
 
         if fence is not None:
             kept.append(line)
-            if match and match.group()[0] == fence[0] and len(match.group()) >= fence[1]:
+            # A closer must be bare fence chars (CommonMark forbids trailing
+            # text on closers); "``` trailing" is not a close.
+            if (
+                match
+                and line.strip() == match.group()
+                and match.group()[0] == fence[0]
+                and len(match.group()) >= fence[1]
+            ):
                 fence = None
             continue
 
@@ -159,16 +177,23 @@ def strip_unloaded(text: str, *, drop_frontmatter: bool = True) -> str:
 
         kept.append(line)
 
+    if in_comment:
+        kept.extend(pending)
+
     return "\n".join(kept)
 
 
-def measure(file_path: Path) -> DocSize:
-    """Estimate the context cost of one doc, ignoring content that never loads."""
+def measure(file_path: Path) -> DocSize | None:
+    """Estimate the context cost of one doc, ignoring content that never loads.
+
+    Returns None when the file cannot be read: a doc the gate cannot measure
+    must fail the gate, never pass it as a zero-cost file.
+    """
     try:
         raw = file_path.read_text(encoding="utf-8", errors="ignore")
     except OSError as exc:
         print(f"  ERROR Reading {file_path}: {exc}")
-        return DocSize(0, 0)
+        return None
 
     # A skill's frontmatter is the one kind that DOES load: `name` +
     # `description` sit in the always-present skill listing. Charge for it.
@@ -179,9 +204,22 @@ def measure(file_path: Path) -> DocSize:
     )
 
 
-def iter_scoped_claude_files(root_dir: Path):
+def walk_reporting_errors(root_dir: Path, scan_errors: list[str]):
+    """os.walk that records unreadable directories instead of skipping them.
+
+    os.walk's default is to silently step past an OSError, so a locked subtree
+    reads as coverage it never had. Callers decide how loudly to fail.
+    """
+
+    def record(error: OSError) -> None:
+        scan_errors.append(str(error.filename or error))
+
+    yield from os.walk(root_dir, onerror=record)
+
+
+def iter_scoped_claude_files(root_dir: Path, scan_errors: list[str]):
     """Yield non-root CLAUDE.md files, skipping generated/dependency dirs."""
-    for dirpath, dirnames, filenames in os.walk(root_dir):
+    for dirpath, dirnames, filenames in walk_reporting_errors(root_dir, scan_errors):
         dirnames[:] = sorted(name for name in dirnames if name not in IGNORED_DIRS)
 
         path = Path(dirpath)
@@ -192,9 +230,9 @@ def iter_scoped_claude_files(root_dir: Path):
             yield path / "CLAUDE.md"
 
 
-def iter_instruction_file_gaps(root_dir: Path):
+def iter_instruction_file_gaps(root_dir: Path, scan_errors: list[str]):
     """Yield directories in scope that lack CLAUDE.md and/or AGENTS.md."""
-    for dirpath, dirnames, _filenames in os.walk(root_dir):
+    for dirpath, dirnames, _filenames in walk_reporting_errors(root_dir, scan_errors):
         dirnames[:] = sorted(
             name
             for name in dirnames
@@ -336,7 +374,11 @@ def check_skill_mirror(root_dir: Path, timestamp: str) -> int:
     mirror = root_dir / ".agents" / "skills"
     want = "../.claude/skills"
 
-    if not skill_canon.exists() or skill_canon.is_symlink():
+    if not skill_canon.exists():
+        print("  WARN  .claude/skills does not exist - nothing to mirror.")
+        return status
+    if skill_canon.is_symlink():
+        print("  WARN  .claude/skills is itself a symlink - mirror check skipped.")
         return status
     if not skill_canon.is_dir():
         print("  FAIL  .claude/skills must be a real directory before mirroring.")
@@ -414,7 +456,8 @@ def audit_wiring(root_dir: Path, timestamp: str) -> int:
         timestamp,
     )
 
-    for scoped_claude in iter_scoped_claude_files(root_dir):
+    scan_errors: list[str] = []
+    for scoped_claude in iter_scoped_claude_files(root_dir, scan_errors):
         status |= check_agents_symlink(
             scoped_claude,
             scoped_claude.with_name("AGENTS.md"),
@@ -422,15 +465,19 @@ def audit_wiring(root_dir: Path, timestamp: str) -> int:
             timestamp,
         )
 
+    for scan_error in scan_errors:
+        print(f"  FAIL  Could not scan {scan_error} - wiring there is UNCHECKED.")
+        status = 1
+
     try:
         canonical_lines = root_claude.read_text(encoding="utf-8", errors="ignore").splitlines()
     except OSError as exc:
         print(f"  ERROR Checking circular imports in CLAUDE.md: {exc}")
         status = 1
     else:
-        if any(line.startswith("@./AGENTS.md") for line in canonical_lines):
+        if any(CIRCULAR_IMPORT_RE.match(line) for line in canonical_lines):
             print(
-                "  WARN  CLAUDE.md imports @./AGENTS.md - circular "
+                "  WARN  CLAUDE.md imports AGENTS.md - circular "
                 "(AGENTS.md is a symlink). Remove that line."
             )
             status = 1
@@ -462,6 +509,19 @@ def print_budget_verdict(
 
     print(prefix.format(level="FAIL") + " - OVER")
     return 1
+
+
+def budget_verdict(label: str, rel_path: Path | str, file_path: Path, budget: int) -> int:
+    """Measure one doc and print its budget verdict.
+
+    An unreadable doc fails loudly instead of passing as a zero-cost file -
+    one ERROR line followed by a PASS derived from a measurement of nothing.
+    """
+    size = measure(file_path)
+    if size is None:
+        print(f"  FAIL  [{label}] {rel_path} could not be read - budget UNCHECKED.")
+        return 1
+    return print_budget_verdict(label, rel_path, size, budget)
 
 
 def is_umbrella(scoped_claude: Path, all_scoped: list[Path]) -> bool:
@@ -520,30 +580,29 @@ def audit_budgets(root_dir: Path) -> int:
     print("\ndocreview: checking size budgets (estimated tokens; lines advisory)")
 
     root_claude = root_dir / "CLAUDE.md"
-    status |= print_budget_verdict(
-        "Root",
-        root_claude.name,
-        measure(root_claude),
-        BUDGET_ROOT_TOKENS,
-    )
+    status |= budget_verdict("Root", root_claude.name, root_claude, BUDGET_ROOT_TOKENS)
 
-    scoped_files = list(iter_scoped_claude_files(root_dir))
+    scan_errors: list[str] = []
+    scoped_files = list(iter_scoped_claude_files(root_dir, scan_errors))
+    for scan_error in scan_errors:
+        print(f"  FAIL  Could not scan {scan_error} - budgets there are UNCHECKED.")
+        status = 1
     for scoped_claude in scoped_files:
         umbrella = is_umbrella(scoped_claude, scoped_files)
-        status |= print_budget_verdict(
+        status |= budget_verdict(
             "Umbrella" if umbrella else "Scoped",
             relative(scoped_claude, root_dir),
-            measure(scoped_claude),
+            scoped_claude,
             BUDGET_UMBRELLA_TOKENS if umbrella else BUDGET_SCOPED_TOKENS,
         )
 
     rules_dir = root_dir / ".claude" / "rules"
     if rules_dir.is_dir():
         for rules_file in sorted(rules_dir.rglob("*.md")):
-            status |= print_budget_verdict(
+            status |= budget_verdict(
                 "Rule",
                 relative(rules_file, root_dir),
-                measure(rules_file),
+                rules_file,
                 BUDGET_RULES_TOKENS,
             )
 
@@ -557,13 +616,16 @@ def repo_root_from_script() -> Path:
 
 def git_worktree_root(cwd: Path) -> Path:
     """Return the Git worktree root for cwd."""
-    result = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        cwd=cwd,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"cannot run git to resolve the worktree root: {exc}") from exc
     if result.returncode != 0:
         raise ValueError(f"{cwd} is not inside a Git worktree")
 
@@ -598,8 +660,11 @@ def print_missing_instruction_report(root_dir: Path) -> int:
     """Print directories missing CLAUDE.md and/or AGENTS.md."""
     print(f"docreview: reporting instruction-file coverage in {root_dir}")
 
-    gaps = list(iter_instruction_file_gaps(root_dir))
-    if not gaps:
+    scan_errors: list[str] = []
+    gaps = list(iter_instruction_file_gaps(root_dir, scan_errors))
+    for scan_error in scan_errors:
+        print(f"  WARN  Could not scan {scan_error} - coverage there is UNKNOWN.")
+    if not gaps and not scan_errors:
         print("  ok    every directory in scope has CLAUDE.md and AGENTS.md")
         return 0
 
@@ -618,9 +683,9 @@ def print_missing_instruction_report(root_dir: Path) -> int:
     return 0
 
 
-def iter_markdown_docs(root_dir: Path):
+def iter_markdown_docs(root_dir: Path, scan_errors: list[str]):
     """Yield repo-owned Markdown docs, skipping symlink mirrors and vendored dirs."""
-    for dirpath, dirnames, filenames in os.walk(root_dir):
+    for dirpath, dirnames, filenames in walk_reporting_errors(root_dir, scan_errors):
         dirnames[:] = sorted(
             name
             for name in dirnames
@@ -639,13 +704,17 @@ def iter_markdown_docs(root_dir: Path):
 
 def print_token_report(root_dir: Path, paths: list[str]) -> int:
     """Print estimated token cost for named docs, or every doc in scope."""
+    scan_errors: list[str] = []
     if paths:
         targets = [Path(p).expanduser() for p in paths]
     else:
-        targets = list(iter_markdown_docs(root_dir))
+        targets = list(iter_markdown_docs(root_dir, scan_errors))
         print(f"docreview: estimating context cost of Markdown docs in {root_dir}")
 
     status = 0
+    for scan_error in scan_errors:
+        print(f"  WARN  Could not scan {scan_error} - docs there are not measured.")
+        status = 1
     for target in targets:
         if not target.is_file():
             print(f"  ERROR {target} is not a readable file")
@@ -653,6 +722,9 @@ def print_token_report(root_dir: Path, paths: list[str]) -> int:
             continue
 
         size = measure(target)
+        if size is None:
+            status = 1
+            continue
         try:
             label = relative(target.resolve(), root_dir).as_posix()
         except ValueError:

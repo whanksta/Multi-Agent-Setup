@@ -34,8 +34,8 @@ enforcement** — a must-always-hold guarantee needs a hook or CI, not a sentenc
 ## Size budgets
 
 Budget **estimated tokens that load** — never lines. Lines are a broken proxy: one long table
-row counts as 1, so a ~6,600-token file could report PASS. This kit's `skill-axes.md` is ~30
-non-blank lines and ~2,200 tokens; a single wide row costs ~270.
+row counts as 1, so a ~6,600-token file could report PASS. This kit's `skill-axes.md` is ~31
+non-blank lines and ~2,200 tokens; a single wide row costs ~230.
 
 ```sh
 python3 scripts/docreview.py tokens              # every doc in scope
