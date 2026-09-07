@@ -278,10 +278,26 @@ def iter_scoped_claude_files(root_dir: Path, scan_errors: list[str]):
             yield path / "CLAUDE.md"
 
 
-def iter_instruction_file_gaps(root_dir: Path, scan_errors: list[str]):
-    """Yield directories in scope that lack CLAUDE.md and/or AGENTS.md."""
+def find_case_variants(filenames: list[str]) -> list[str]:
+    """Return mis-cased CLAUDE.md/AGENTS.md entries within one directory listing.
+
+    Claude Code reads `CLAUDE.md` and Codex reads `AGENTS.md` exactly - the
+    AGENTS.md spec says so outright - but OS path lookups fold case on macOS
+    and Windows default filesystems. Only real directory entries tell the
+    truth, so variant detection compares those, never exists()-style checks.
+    """
+    canonical = {"CLAUDE.md", "AGENTS.md"}
+    return sorted(
+        name
+        for name in filenames
+        if name.lower() in {"claude.md", "agents.md"} and name not in canonical
+    )
+
+
+def iter_case_variants(root_dir: Path, scan_errors: list[str]):
+    """Yield (relative_dir, filename) for every mis-cased instruction file in scope."""
     ignored = IGNORED_DIRS | load_extra_ignores(root_dir)
-    for dirpath, dirnames, _filenames in walk_reporting_errors(root_dir, scan_errors):
+    for dirpath, dirnames, filenames in walk_reporting_errors(root_dir, scan_errors):
         dirnames[:] = sorted(
             name
             for name in dirnames
@@ -289,8 +305,29 @@ def iter_instruction_file_gaps(root_dir: Path, scan_errors: list[str]):
         )
 
         path = Path(dirpath)
-        missing_claude = not os.path.lexists(path / "CLAUDE.md")
-        missing_agents = not os.path.lexists(path / "AGENTS.md")
+        for variant in find_case_variants(filenames):
+            rel_dir = Path(".") if path == root_dir else relative(path, root_dir)
+            yield rel_dir, variant
+
+
+def iter_instruction_file_gaps(root_dir: Path, scan_errors: list[str]):
+    """Yield directories in scope that lack CLAUDE.md and/or AGENTS.md.
+
+    Membership is tested against os.walk's directory entries, which preserve
+    case everywhere - an os.path.lexists lookup would fold case on macOS and
+    Windows and count claude.md as CLAUDE.md.
+    """
+    ignored = IGNORED_DIRS | load_extra_ignores(root_dir)
+    for dirpath, dirnames, filenames in walk_reporting_errors(root_dir, scan_errors):
+        dirnames[:] = sorted(
+            name
+            for name in dirnames
+            if name not in ignored and not (Path(dirpath) / name).is_symlink()
+        )
+
+        path = Path(dirpath)
+        missing_claude = "CLAUDE.md" not in filenames
+        missing_agents = "AGENTS.md" not in filenames
 
         if missing_claude or missing_agents:
             relative_dir = Path(".") if path == root_dir else relative(path, root_dir)
@@ -487,6 +524,23 @@ def audit_wiring(root_dir: Path, timestamp: str) -> int:
 
     if not root_claude.exists():
         print("  FAIL  CLAUDE.md (canonical) is missing - cannot continue.")
+        sys.exit(1)
+
+    # Wrong-case variants fail before any repair: path lookups fold case on
+    # macOS/Windows, so a claude.md/agents.md variant can satisfy the checks
+    # below while no agent on a case-sensitive filesystem ever reads it.
+    case_scan_errors: list[str] = []
+    case_variants = list(iter_case_variants(root_dir, case_scan_errors))
+    for scan_error in case_scan_errors:
+        print(f"  FAIL  Could not scan {scan_error} - filename case there is UNCHECKED.")
+        status = 1
+    if case_variants:
+        for rel_dir, name in case_variants:
+            where = (rel_dir / name).as_posix()
+            print(
+                f"  FAIL  {where} - wrong case. Claude Code reads CLAUDE.md and "
+                "Codex reads AGENTS.md, exactly; rename (git mv) and re-run."
+            )
         sys.exit(1)
 
     if root_claude.is_symlink():
@@ -760,15 +814,16 @@ def resolve_scope_root(scope: str, custom_path: str | None, cwd: Path) -> Path:
 
 
 def print_missing_instruction_report(root_dir: Path) -> int:
-    """Print directories missing CLAUDE.md and/or AGENTS.md."""
+    """Print directories missing CLAUDE.md and/or AGENTS.md, plus wrong-case variants."""
     print(f"docreview: reporting instruction-file coverage in {root_dir}")
 
     scan_errors: list[str] = []
     gaps = list(iter_instruction_file_gaps(root_dir, scan_errors))
+    variants = list(iter_case_variants(root_dir, scan_errors))
     for scan_error in scan_errors:
         print(f"  WARN  Could not scan {scan_error} - coverage there is UNKNOWN.")
-    if not gaps and not scan_errors:
-        print("  ok    every directory in scope has CLAUDE.md and AGENTS.md")
+    if not gaps and not variants and not scan_errors:
+        print("  ok    every directory in scope has correctly-cased CLAUDE.md and AGENTS.md")
         return 0
 
     for gap in gaps:
@@ -778,6 +833,10 @@ def print_missing_instruction_report(root_dir: Path) -> int:
         if gap.missing_agents:
             missing.append("AGENTS.md")
         print(f"  info  {gap.relative_dir.as_posix()} missing {', '.join(missing)}")
+
+    for rel_dir, name in variants:
+        where = (rel_dir / name).as_posix()
+        print(f"  info  {where} - wrong case; no agent reads it. Rename (git mv) to the exact name.")
 
     print(
         "  note  Missing CLAUDE.md entries are prompts to consider scoped files "

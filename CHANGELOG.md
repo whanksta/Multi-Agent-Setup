@@ -113,6 +113,18 @@ wiring checks. This batch closes the gaps that didn't.
   umbrella/scoped classification rule must say so in its Adoption Notes (stated in the header
   prose above).
 
+### Fixed
+
+- **`docreview.py` now enforces exact filename case (silent-pass fix).** Every `CLAUDE.md`/
+  `AGENTS.md` membership test compares real directory entries instead of OS path lookups:
+  on case-insensitive filesystems (macOS, Windows default) a lookup for `CLAUDE.md` folds case
+  and finds `claude.md`, so the gate could print `docreview: PASS` on wiring that no
+  case-sensitive agent ever reads — Claude Code and Codex match the literal names, and the
+  AGENTS.md spec says outright: "The name is case-sensitive — agents look for exactly this
+  filename" (verified 2026-09-07). `check` now FAILs wrong-case variants with a rename
+  instruction before performing any repair, and `missing` reports them ("wrong case; no agent
+  reads it"). The `missing` all-clear now reads "correctly-cased".
+
 ### Adoption Notes
 
 - Replace `scripts/docreview.py` and `.claude/skills/docreview/` (SKILL.md +

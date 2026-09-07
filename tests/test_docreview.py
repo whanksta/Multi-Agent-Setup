@@ -164,6 +164,85 @@ class MissingInstructionFileReportTests(unittest.TestCase):
         self.assertFalse(any("generated" in path.parts for path in docs))
         self.assertFalse(any("generated" in path.parts for path in scoped))
 
+    def test_case_variant_detection_compares_directory_entries(self) -> None:
+        """Variant detection must be dirent-based, never an exists()-style lookup.
+
+        macOS/Windows default filesystems fold case in path lookups, so
+        claude.md would satisfy a CLAUDE.md exists() check while no
+        case-sensitive agent reads it. os.walk's filenames preserve case.
+        """
+        docreview = load_docreview_module()
+
+        self.assertEqual(
+            docreview.find_case_variants(["CLAUDE.md", "AGENTS.md", "readme.md"]),
+            [],
+        )
+        self.assertEqual(
+            docreview.find_case_variants(["claude.md", "Agents.md", "CLAUDE.local.md"]),
+            ["Agents.md", "claude.md"],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "CLAUDE.md").write_text("root\n", encoding="utf-8")
+            (root / "agents.md").write_text("wrong case\n", encoding="utf-8")
+
+            variants = list(docreview.iter_case_variants(root, []))
+
+        self.assertEqual(
+            [(rel.as_posix(), name) for rel, name in variants],
+            [(".", "agents.md")],
+        )
+
+    def test_missing_command_reports_wrong_case_variants(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "CLAUDE.md").write_text("root\n", encoding="utf-8")
+            (root / "agents.md").write_text("wrong case\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT_PATH),
+                    "missing",
+                    "--scope",
+                    "path",
+                    "--path",
+                    str(root),
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("agents.md - wrong case; no agent reads it", result.stdout)
+        self.assertNotIn("every directory in scope has", result.stdout)
+
+    def test_check_command_fails_on_wrong_case_instruction_files(self) -> None:
+        """A lowercase agents.md must fail the gate even on case-folding filesystems."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "CLAUDE.md").write_text("root\n", encoding="utf-8")
+            (root / "agents.md").write_text("wrong case\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("wrong case", result.stdout)
+        self.assertIn("agents.md", result.stdout)
+        self.assertNotIn("docreview: PASS", result.stdout)
+
     def test_missing_command_honors_custom_path_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

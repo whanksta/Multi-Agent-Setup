@@ -240,6 +240,9 @@ instead of overwriting them.
 - **Windows:** symlinks require Developer Mode plus `git config core.symlinks true`, or an elevated
   shell. If symlinks check out as plain files, `docreview` will report the problem and repair it
   when the OS permits.
+- **Filename case:** `CLAUDE.md` and `AGENTS.md` exactly — Claude Code and Codex match the literal
+  names, so a lowercase variant can seem to work on macOS/Windows and silently fails on Linux.
+  `docreview` fails wrong-case files outright.
 - **Gemini CLI:** Google ended individual/free, Pro, and Ultra Gemini CLI request serving on
   June 18, 2026, moving those users to Antigravity CLI; enterprise and API-key access differs.
   See Google's
