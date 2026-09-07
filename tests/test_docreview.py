@@ -190,7 +190,7 @@ class MissingInstructionFileReportTests(unittest.TestCase):
             variants = list(docreview.iter_case_variants(root, []))
 
         self.assertEqual(
-            [(rel.as_posix(), name) for rel, name in variants],
+            [(rel.as_posix(), name) for _dir, rel, name in variants],
             [(".", "agents.md")],
         )
 
@@ -220,8 +220,8 @@ class MissingInstructionFileReportTests(unittest.TestCase):
         self.assertIn("agents.md - wrong case; no agent reads it", result.stdout)
         self.assertNotIn("every directory in scope has", result.stdout)
 
-    def test_check_command_fails_on_wrong_case_instruction_files(self) -> None:
-        """A lowercase agents.md must fail the gate even on case-folding filesystems."""
+    def test_check_command_repairs_wrong_case_instruction_files(self) -> None:
+        """A lowercase agents.md is renamed (not warned about) even on case-folding FS."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             script_path = root / "scripts" / "docreview.py"
@@ -238,10 +238,61 @@ class MissingInstructionFileReportTests(unittest.TestCase):
                 check=False,
             )
 
-        self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertIn("wrong case", result.stdout)
-        self.assertIn("agents.md", result.stdout)
-        self.assertNotIn("docreview: PASS", result.stdout)
+            # Dirent-based assertions: a case-folded exists() lookup would find
+            # the new AGENTS.md through the fold and mask a surviving variant.
+            entries = os.listdir(root)
+            agents_is_symlink = (root / "AGENTS.md").is_symlink()
+            variant_gone = "agents.md" not in entries
+            canonical_present = "AGENTS.md" in entries
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("renamed agents.md -> AGENTS.md", result.stdout)
+        self.assertTrue(variant_gone)
+        self.assertTrue(canonical_present)
+        self.assertTrue(agents_is_symlink)
+        self.assertIn("docreview: PASS", result.stdout)
+
+    def test_check_uses_git_mv_for_tracked_wrong_case_files(self) -> None:
+        """A tracked variant must move via git mv - a plain rename is a silent
+        no-op for the index on case-insensitive filesystems, and the next
+        case-sensitive clone would resurrect the wrong name."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "claude.md").write_text("root\n", encoding="utf-8")
+
+            for args in (
+                ["git", "init", "-q"],
+                ["git", "config", "user.email", "t@example.com"],
+                ["git", "config", "user.name", "t"],
+                ["git", "add", "claude.md"],
+                ["git", "commit", "-qm", "init"],
+            ):
+                subprocess.run(args, cwd=root, check=True)
+
+            result = subprocess.run(
+                [sys.executable, str(script_path)],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            listed = subprocess.run(
+                ["git", "ls-files"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout.split()
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("claude.md -> CLAUDE.md (git mv", result.stdout)
+        self.assertIn("CLAUDE.md", listed)
+        self.assertNotIn("claude.md", listed)
+        self.assertIn("docreview: PASS", result.stdout)
 
     def test_missing_command_honors_custom_path_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

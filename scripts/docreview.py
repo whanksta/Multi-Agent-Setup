@@ -295,7 +295,7 @@ def find_case_variants(filenames: list[str]) -> list[str]:
 
 
 def iter_case_variants(root_dir: Path, scan_errors: list[str]):
-    """Yield (relative_dir, filename) for every mis-cased instruction file in scope."""
+    """Yield (dir_path, relative_dir, filename) for mis-cased instruction files."""
     ignored = IGNORED_DIRS | load_extra_ignores(root_dir)
     for dirpath, dirnames, filenames in walk_reporting_errors(root_dir, scan_errors):
         dirnames[:] = sorted(
@@ -307,7 +307,79 @@ def iter_case_variants(root_dir: Path, scan_errors: list[str]):
         path = Path(dirpath)
         for variant in find_case_variants(filenames):
             rel_dir = Path(".") if path == root_dir else relative(path, root_dir)
-            yield rel_dir, variant
+            yield path, rel_dir, variant
+
+
+def is_git_tracked(worktree: Path, path: Path) -> bool:
+    """Return whether path is tracked in the worktree's Git index."""
+    try:
+        rel = path.resolve().relative_to(worktree).as_posix()
+        result = subprocess.run(
+            ["git", "-C", str(worktree), "ls-files", "--error-unmatch", "--", rel],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return False
+    return result.returncode == 0
+
+
+def repair_case_variant(root_dir: Path, dir_path: Path, rel_dir: Path, variant: str) -> int:
+    """Rename a mis-cased instruction file to its canonical exact-case name.
+
+    Tracked files move via `git mv`: a plain rename of a tracked file is a
+    silent no-op for the index on case-insensitive filesystems, so the local
+    tree looks fixed while the next case-sensitive clone resurrects the wrong
+    name. When both the canonical file and the variant exist as separate files
+    (possible only on case-sensitive filesystems), the choice is a human's.
+    """
+    canonical = "CLAUDE.md" if variant.lower() == "claude.md" else "AGENTS.md"
+    where = (rel_dir / variant).as_posix()
+
+    if canonical in os.listdir(dir_path):
+        print(
+            f"  FAIL  {where}: both {canonical} and {variant} exist as separate "
+            "files - merge or delete the variant by hand, then re-run."
+        )
+        return 1
+
+    source = dir_path / variant
+    try:
+        worktree = git_worktree_root(dir_path)
+        rel_source = source.resolve().relative_to(worktree)
+        rel_target = (dir_path / canonical).resolve().relative_to(worktree)
+    except (OSError, ValueError):
+        worktree = None
+
+    if worktree is not None and is_git_tracked(worktree, source):
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(worktree),
+                "mv",
+                "--",
+                rel_source.as_posix(),
+                rel_target.as_posix(),
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            print(f"  FIX   {where} -> {canonical} (git mv - filename case is exact).")
+            return 0
+        print(f"  FAIL  git mv {where} -> {canonical}: {result.stderr.strip()}")
+        return 1
+
+    try:
+        os.rename(source, dir_path / canonical)
+    except OSError as exc:
+        print(f"  FAIL  renaming {where} -> {canonical}: {exc}")
+        return 1
+    print(f"  FIX   renamed {where} -> {canonical} (filename case is exact).")
+    return 0
 
 
 def iter_instruction_file_gaps(root_dir: Path, scan_errors: list[str]):
@@ -522,25 +594,20 @@ def audit_wiring(root_dir: Path, timestamp: str) -> int:
     status = 0
     root_claude = root_dir / "CLAUDE.md"
 
-    if not root_claude.exists():
-        print("  FAIL  CLAUDE.md (canonical) is missing - cannot continue.")
-        sys.exit(1)
-
-    # Wrong-case variants fail before any repair: path lookups fold case on
-    # macOS/Windows, so a claude.md/agents.md variant can satisfy the checks
-    # below while no agent on a case-sensitive filesystem ever reads it.
+    # Repair wrong-case variants before the canonical checks: path lookups
+    # fold case on macOS/Windows, so a claude.md/agents.md variant can satisfy
+    # the checks below while no agent on a case-sensitive filesystem reads it.
+    # Renaming first also lets a root-level claude.md fix itself instead of
+    # tripping the missing-file exit on case-sensitive filesystems.
     case_scan_errors: list[str] = []
-    case_variants = list(iter_case_variants(root_dir, case_scan_errors))
+    for dir_path, rel_dir, variant in iter_case_variants(root_dir, case_scan_errors):
+        status |= repair_case_variant(root_dir, dir_path, rel_dir, variant)
     for scan_error in case_scan_errors:
         print(f"  FAIL  Could not scan {scan_error} - filename case there is UNCHECKED.")
         status = 1
-    if case_variants:
-        for rel_dir, name in case_variants:
-            where = (rel_dir / name).as_posix()
-            print(
-                f"  FAIL  {where} - wrong case. Claude Code reads CLAUDE.md and "
-                "Codex reads AGENTS.md, exactly; rename (git mv) and re-run."
-            )
+
+    if not root_claude.exists():
+        print("  FAIL  CLAUDE.md (canonical) is missing - cannot continue.")
         sys.exit(1)
 
     if root_claude.is_symlink():
@@ -834,9 +901,9 @@ def print_missing_instruction_report(root_dir: Path) -> int:
             missing.append("AGENTS.md")
         print(f"  info  {gap.relative_dir.as_posix()} missing {', '.join(missing)}")
 
-    for rel_dir, name in variants:
+    for _dir_path, rel_dir, name in variants:
         where = (rel_dir / name).as_posix()
-        print(f"  info  {where} - wrong case; no agent reads it. Rename (git mv) to the exact name.")
+        print(f"  info  {where} - wrong case; no agent reads it (`check` renames it automatically).")
 
     print(
         "  note  Missing CLAUDE.md entries are prompts to consider scoped files "

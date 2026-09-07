@@ -121,9 +121,13 @@ wiring checks. This batch closes the gaps that didn't.
   and finds `claude.md`, so the gate could print `docreview: PASS` on wiring that no
   case-sensitive agent ever reads — Claude Code and Codex match the literal names, and the
   AGENTS.md spec says outright: "The name is case-sensitive — agents look for exactly this
-  filename" (verified 2026-09-07). `check` now FAILs wrong-case variants with a rename
-  instruction before performing any repair, and `missing` reports them ("wrong case; no agent
-  reads it"). The `missing` all-clear now reads "correctly-cased".
+  filename" (verified 2026-09-07). `check` now **repairs** wrong-case variants automatically —
+  renamed to the exact case via `git mv` when the file is Git-tracked (a plain rename is a
+  silent no-op for the index on case-insensitive filesystems; the next case-sensitive clone
+  would resurrect the wrong name) and via `os.rename` otherwise — and FAILs only when both the
+  canonical file and the variant exist as separate files (possible only on case-sensitive
+  filesystems; that merge is a human's). `missing` stays report-only and notes that `check`
+  renames variants; its all-clear now reads "correctly-cased".
 
 ### Adoption Notes
 
