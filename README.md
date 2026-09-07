@@ -95,7 +95,9 @@ https://github.com/whanksta/Multi-Agent-Setup.
    .claude/skills/codebase-audit/, and .githooks/pre-commit. Create AGENTS.md as a relative
    symlink to CLAUDE.md and .agents/skills as a folder symlink to .claude/skills. Add the needed
    .gitignore entries (CLAUDE.local.md, .claude/settings.local.json, __pycache__/, *.py[cod],
-   *.clobbered-*, .DS_Store) without removing unrelated ones.
+   *.clobbered-*, .DS_Store) without removing unrelated ones. If I previously patched any
+   kit-owned file, diff my copy against the clone first, re-apply my patches after copying, and
+   record them so the next update repeats this cleanly.
 
 4. MERGE ONLY ROOT CLAUDE.md — it is my repo's master instruction file. Blend the kit's wiring
    sections with my existing project rules; never overwrite them.
@@ -106,6 +108,11 @@ https://github.com/whanksta/Multi-Agent-Setup.
 6. Run python3 scripts/docreview.py from my repo root — the copy just installed, not the /tmp/mas
    clone's script (that one audits the kit itself, not my repo). Confirm it prints docreview: PASS,
    then summarize what changed and any adoption notes from CHANGELOG.md.
+
+Notes: a budget-tightening update can make the newly copied script FAIL before my conformance
+edits exist — finish those edits first, then land the kit update + conformance edits as adjacent
+commits (or one --no-verify commit for the regime change itself). Work to the end: you have ample
+context remaining; do not stop, summarize, or suggest a new session mid-flow.
 ```
 
 No `git`? Download the source zip instead, then use it as `SRC` anywhere the prompt says `/tmp/mas`:
@@ -151,7 +158,7 @@ The agent's per-file contract. "Copy exactly" means byte-for-byte from the clone
 | `AGENTS.md` | Symlink to `CLAUDE.md` for Codex and Antigravity. |
 | `.claude/skills/` | Canonical shared skills directory. |
 | `.agents/skills` | Folder symlink to `.claude/skills`. |
-| `scripts/docreview.py` | Verifies and repairs wiring; checks instruction-file size budgets in estimated tokens. |
+| `scripts/docreview.py` | Verifies and repairs wiring; checks instruction-file size budgets in estimated tokens; `debt` reports soft budget debt; `.docreview-ignore` holds local extra ignores. |
 | `.githooks/pre-commit` | Optional Git hook running `docreview` (gate) + `codebase-audit --staged` (advisory) before each commit. |
 | `.claude/skills/docreview/` | Agent skill for wiring checks and doc-doctrine review. |
 | `.claude/skills/codebase-audit/` | Core agent skill + script for structural hotspot/churn signals (advisory, not a gate). |
@@ -279,6 +286,15 @@ block-level HTML comments are excluded everywhere, and YAML frontmatter everywhe
 python3 scripts/docreview.py tokens                # every doc in scope
 python3 scripts/docreview.py tokens CLAUDE.md      # named files
 ```
+
+Local ignores: extra ignored directory names (generated-output folders, worktree checkouts)
+live in a `.docreview-ignore` file at the scope root — the repo root in the default scope — one
+name per line, `#` comments (full-line or trailing) allowed; commit it so the whole team shares
+it. Customization never forks the script's bytes.
+
+Soft budget debt has a durable artifact — `python3 scripts/docreview.py debt` lists every
+WITHIN-SLACK/OVER file with its tokens/budget ratio. Report-only, always exits 0; the `check`
+command stays the gate.
 
 The default scope is auto: use the project that owns `scripts/docreview.py`, independent of the
 current working directory. Use `--scope worktree` when you explicitly want the current Git worktree,

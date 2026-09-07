@@ -4,9 +4,114 @@ This file is for agents as much as humans. When a user pastes the repo link into
 the agent should read this file to understand what changed and what the target repo should adopt.
 
 This repo uses the GitHub repo link as the delivery channel, so dated sections represent update
-batches available once committed.
+batches available once committed. A batch that changes budget tiers, `CHARS_PER_TOKEN`, or the
+umbrella/scoped classification rule must say so in its Adoption Notes — those changes silently
+move adopters' files between budgets.
 
 Historical entries were reconstructed from Git history through `7b20a84`.
+
+## 2026-09-07
+
+Stress-test feedback from updating an adopted repo ~2 months / 3 batches behind HEAD (~430
+markdown docs, `.githooks` active, concurrent agent sessions in the tree). What held up:
+`.mas-version` stamping, changelog-as-delivery-channel, the `tokens` subcommand, symlink
+wiring checks. This batch closes the gaps that didn't.
+
+### Added
+
+- **`docreview.py debt` subcommand.** WITHIN-SLACK verdicts printed on every run with no memory
+  between runs — "soft flag for next pass" produced nothing for the next pass to read. `debt`
+  lists every WITHIN-SLACK and OVER file with its tokens/budget ratio, for CI or humans.
+  Report-only, always exits 0 (the `check` command remains the gate). `check` and `debt` now
+  share one budget-target discovery (`iter_budget_targets`), so they can never disagree about
+  scope.
+- **`.docreview-ignore` — local ignore customization.** Adopters needing extra ignored
+  directories (generated-output folders, worktree checkouts) had to patch `docreview.py`
+  itself; the next byte-exact copy silently destroyed the patch. All three walkers now merge
+  directory names from a `.docreview-ignore` file at the scope root (one per line, `#`
+  comments — full-line or trailing — and blanks skipped; gitignore-style trailing slashes and a
+  leading BOM are normalized; path-shaped entries warn and are skipped; an unreadable file
+  warns and keeps built-ins only; loaded once per run). Customization no longer forks kit
+  bytes.
+- **Doctrine: dated-truth carve-out (axis 5).** Dated records — changelog batches, append-only
+  ledgers, completed plans — are correct as of their date, not stale. Staleness fires only when
+  the framing claims currency (an undated "current"/"live" header) or a superseded record is
+  still presented as current; supersession gets an explicit "Superseded YYYY-MM-DD" note.
+- **Doctrine: Archive trees mode.** Large dated work-product trees (completed plans, task
+  artifacts, generated reports) get a different audit: freshness is the wrong axis — for an
+  archive, correctness means honest deadness. Procedure: read the tree's index/convention docs
+  fully, spot-check bodies, sweep inbound links, verify generators still exist. Canonical fix
+  is a one-line status banner ("Archived YYYY-MM" + "Superseded YYYY-MM-DD by X" when
+  superseded); `[delete]` only when superseded AND unreferenced AND misleading.
+  The skill's mode list gains a matching third mode (archive-tree review).
+- **Doctrine: `[owner-call]` fix-class.** Real findings that must NOT be edited — deletions
+  needing human judgment (tracked/regenerable data), evidence-grade do-not-rewrite files, files
+  owned by a concurrent session. Reported with evidence, never applied.
+- **Skill: coverage attestation.** The findings format gains a Coverage section — per file-set,
+  state read-fully / sampled (+ strategy) / parity-checked / verified-by-grep-only. Sampling is
+  fine; silent sampling reads as full coverage, and at fan-out scale the difference matters.
+- **Skill: paste-ready auditor preamble + count-based fan-out.** Fresh-context audit subagents
+  load no `CLAUDE.md`, so every dispatcher reinvented the restated-rules block — with real
+  mistakes (auditing `AGENTS.md` mirrors, trusting stale worktree checkouts). The Scaling
+  section now ships the preamble (canonical paths only, skip mirrors, fixed inventory,
+  verify-don't-trust, findings format, anti-abort line) and sizes clusters by file count
+  (~50–60 docs per auditor) instead of the fixed root/scoped/docs triple. Vendor guidance backs
+  the fan-out pattern: "Separate, fresh-context verifier subagents tend to outperform
+  self-critique" (Anthropic, verified 2026-09-07). It also adds concurrent-writer guidance:
+  apply agents stage explicit pathspecs — foreign staged files are another session's
+  work-in-progress, never `git add -A`.
+- **Doctrine: C11 migration trigger + reasoning-extraction sweep.** When the consuming model
+  generation changes, re-run the doctrine audit with a "too prescriptive?" lens — collapse
+  enumerated-behavior rules into brief steering, delete rules restating the new model's
+  defaults — and sweep for show-your-thinking / echo-your-reasoning directives, which current
+  models can refuse outright. Evidence (verified against the live doc, 2026-09-07): Anthropic's
+  Fable 5 prompting guide — "Skills developed for prior models are often too prescriptive for
+  Claude Fable 5 and can degrade output quality"; instructions to "echo, transcribe, or explain
+  its internal reasoning" can trigger the `reasoning_extraction` refusal category;
+  and "avoid surfacing explicit context-budget counts where possible."
+
+### Changed
+
+- **Doctrine no longer inlines its own measurements.** The "~31 non-blank lines / ~2,200
+  tokens" self-measurements rotted once already (refreshed 2026-08-19 after rotting inside
+  2026-08-03). The Size budgets section now cites the `docreview.py tokens` commands instead
+  of printing numbers that decay between releases, and notes the script's constants are the
+  authoritative tier source.
+- **"Versioned facts point, never restate" (OR5 extension).** OR5 caught verbatim prose
+  restatement (≥3 consecutive sentences) but not paraphrased numbers. Adopting repos restating
+  kit-owned budget figures/tiers/constants inside their own rulebooks see those paraphrases rot
+  on the next kit update. Root `CLAUDE.md` self-applies the rule: the tier numbers became a
+  pointer to the docreview gate plus the re-deriving command.
+- **Budget arithmetic stays out of model-facing instruction files (doctrine, one line).**
+  Runtime context-budget counts (tokens remaining, budget arithmetic) belong in human- and
+  CI-facing reports, never pasted into instruction files the model itself reads. File-size
+  ceilings are authoring rules, not runtime accounting, and stay.
+- **Adoption flow hardened (README prompt).** The update path now covers the transition state
+  where a budget-tightening release makes the newly copied script FAIL before any conformance
+  edits exist (finish the conformance edits first; land kit update + conformance as adjacent
+  commits, or one `--no-verify` commit for the regime change itself). It carries an anti-abort
+  line — ample context remaining; do not stop, summarize, or suggest a new session mid-flow —
+  since Fable-class agents can otherwise end a multi-hour adoption campaign silently. OpenAI's
+  2026 Astra guidance warns of the sibling failure — agents stopping mid-work to ask
+  clarifying questions; its counter is "complete the work that is already authorized from
+  context." And it tells previously-patched adopters to diff kit-owned files against the clone
+  before copying, re-apply patches, and record them.
+- **Changelog convention:** any batch that changes budget tiers, `CHARS_PER_TOKEN`, or the
+  umbrella/scoped classification rule must say so in its Adoption Notes (stated in the header
+  prose above).
+
+### Adoption Notes
+
+- Replace `scripts/docreview.py` and `.claude/skills/docreview/` (SKILL.md +
+  reference/doctrine.md); re-blend root `CLAUDE.md` — the budget tier numbers became a pointer
+  to the docreview gate, so drop your copies of the figures too. `.githooks/pre-commit` is
+  unchanged this batch.
+- **No budget tier, `CHARS_PER_TOKEN`, or umbrella/scoped classification change in this
+  batch** — your files' verdicts move only if their content did.
+- If you patched `scripts/docreview.py` to ignore extra directories, revert to the kit copy
+  and list those directory names in `.docreview-ignore` instead — that is what it is for.
+- README changes are source-side guidance for future installs and updates; installed repos
+  have no kit README and can skip them.
 
 ## 2026-08-21
 

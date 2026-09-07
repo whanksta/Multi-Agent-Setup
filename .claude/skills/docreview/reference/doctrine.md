@@ -8,6 +8,7 @@ Contents:
 - [Size budgets](#size-budgets) — token ceilings + verdict scale
 - [CLAUDE.md authoring rubric (C1–C11)](#claudemd-authoring-rubric-c1c11)
 - [The 10 audit axes](#the-10-audit-axes) — catch + verify recipe for each
+- [Archive trees](#archive-trees) — dated work-product trees audit for honest deadness
 - [Scope discipline](#scope-discipline) — OR5, OR8, subtraction-first
 - [Fix-classes](#fix-classes) — how a finding routes to an edit
 
@@ -34,8 +35,9 @@ enforcement** — a must-always-hold guarantee needs a hook or CI, not a sentenc
 ## Size budgets
 
 Budget **estimated tokens that load** — never lines. Lines are a broken proxy: one long table
-row counts as 1, so a ~6,600-token file could report PASS. This kit's `skill-axes.md` is ~31
-non-blank lines and ~2,200 tokens; a single wide row costs ~230.
+row counts as 1, so a ~6,600-token file could report PASS, and a single wide row costs hundreds
+of tokens. Measure with the commands below — never paste this kit's current numbers into other
+docs; they rot between releases.
 
 ```sh
 python3 scripts/docreview.py tokens              # every doc in scope
@@ -45,10 +47,12 @@ python3 scripts/docreview.py tokens CLAUDE.md    # named files
 Two rules keep the estimate honest: **measure only what loads** — block-level HTML comments are
 excluded everywhere, YAML frontmatter everywhere except a `SKILL.md` (whose `name`/`description`
 do load via the skill listing); comments inside code fences are kept — and
-**`CHARS_PER_TOKEN = 2.5`**, measured across this kit's docs (range 2.42–2.58; the familiar
-"~3.5" predates current tokenizers and understates dense markdown by ~40%).
+**`CHARS_PER_TOKEN = 2.5`** (the script's constant — this notes its calibration), measured
+across this kit's docs (range 2.42–2.58; the familiar "~3.5" predates current tokenizers and
+understates dense markdown by ~40%).
 
-Budget tiers (always-loaded files only):
+Budget tiers (always-loaded files only; `docreview.py`'s constants enforce them and are
+authoritative — this table explains them):
 
 | Tier | File | Budget (est. tokens) |
 |------|------|----------------------|
@@ -63,7 +67,13 @@ gate on them.
 
 Verdict scale per always-loaded file: **PASS** at/under budget · **WITHIN-SLACK** over but
 < 1.5×, soft flag for next pass · **OVER** ≥ 1.5×, hard flag — the finding must propose which
-sections move where and est. tokens saved.
+sections move where and est. tokens saved. WITHIN-SLACK has no memory between runs:
+`docreview.py debt` lists it with ratios as the durable artifact for CI or humans.
+
+Keep runtime context-budget counts (tokens remaining, budget arithmetic) in human- and
+CI-facing reports, never in instruction files the model itself reads — 2026 vendor prompting
+guidance says avoid surfacing explicit context-budget counts. File-size ceilings are authoring
+rules, not runtime accounting, and stay fine in doctrine.
 
 ## CLAUDE.md authoring rubric (C1–C11)
 
@@ -83,6 +93,13 @@ Classify each finding **BLOCKER** (breaks loading/correctness) / **SHOULD** (deg
 | **C9 No secrets** | Leaked credentials | No passwords / tokens / connection strings / PII — **BLOCKER**. Secrets → env vars only. |
 | **C10 Imports + pointers** | Broken, expensive, or blind references | `@path` imports must resolve, be needed, and not pull in huge files (imports load in full at launch). "See X.md" pointers must resolve **and** say when/why to read the file — a bare path gets ignored. `<!-- comments -->` are stripped from context: never load-bearing, never budgeted. |
 | **C11 Obsolete safeguards** | Rules written to defend against weaker models | Frontier models self-verify; in 2026 Anthropic cut **>80% of Claude Code's own system prompt** for its newest models with no measured eval loss. **Delete:** "verify your work" / "double-check before responding" / "re-read the file after editing" (they cause *over*-verification), severity filters that muzzle a review, and any rule freezing one answer to a question the model now judges per-situation. **Keep:** repo-specific gotchas, rationale, conventions differing from tool defaults. |
+
+**C11 migration trigger:** when the consuming model generation changes, re-run the doctrine
+audit with a *too prescriptive?* lens — collapse enumerated-behavior rules into brief steering
+and delete rules that restate the new model's defaults; Anthropic's 2026 guidance says
+instructions written for prior models are often too prescriptive for the newest ones. Include
+show-your-thinking / echo-your-reasoning directives in that sweep — 2026 frontier models can
+refuse reasoning-extraction instructions outright.
 
 ## The 10 audit axes
 
@@ -106,6 +123,10 @@ form, then `grep -rnE "(Variant1|Variant2)" .` and re-sweep until zero straggler
 owners, "currently X").
 `grep -rnE "as of [0-9]{4}-[0-9]{2}-[0-9]{2}|currently|recently" CLAUDE.md docs/` — stale →
 update/remove; volatile → move to git history / CHANGELOG, leave a stable rule.
+**Dated records are correct as of their date** — changelog batches, append-only ledgers,
+completed plans are not stale. Staleness fires only when the framing claims currency (an
+undated "current"/"live" header over dated content) or when a superseded record is still
+presented as current; mark supersession explicitly ("Superseded YYYY-MM-DD by X").
 **6 — Placement.** Right info, wrong scope: module-only rule at root, project-wide rule
 restated in a scoped file, pointer-only heading. Push doctrine to the narrowest scope it
 applies to; pull genuinely-broad content up.
@@ -127,11 +148,25 @@ install/build/test/lint commands (copy-paste ready), required env vars, non-obvi
 Probe only where the project warrants. Missing-but-needed = SHOULD; never licenses directory
 listings or generic advice (C3 still deletes those).
 
+## Archive trees
+
+Large dated work-product trees (completed plans, task artifacts, generated reports) get a
+different audit mode: freshness is the wrong axis — for an archive, correctness means **honest
+deadness**.
+
+- Read the tree's index/convention docs fully; spot-check bodies.
+- Sweep inbound links (what still points here?) and verify generators still exist.
+- The canonical fix is a one-line status banner ("Archived YYYY-MM" + "Superseded
+  YYYY-MM-DD by X" when superseded).
+- `[delete]` only when the record is superseded AND unreferenced AND misleading.
+
 ## Scope discipline
 
 - **OR5 — right-sized scope.** A child doc *points to* parent doctrine, never restates it.
   Operational test: restating ≥ 3 consecutive sentences from a linked doc is a violation —
-  collapse to one sentence + a pointer. The single most common real defect.
+  collapse to one sentence + a pointer. The single most common real defect. Versioned facts
+  (budgets, tiers, constants) owned elsewhere get a pointer plus the command that re-derives
+  them — paraphrased numbers rot on the next update; prose restatement is just the visible case.
 - **OR8 — minimal-but-correct.** Every token in an always-loaded doc must justify its per-turn
   cost: pointer over restatement, table over prose, row over narrative. Don't trim for its own
   sake or add speculatively — content earns its place by stating a rule future agents need at
@@ -159,6 +194,9 @@ Tag each finding so the apply step knows the edit it implies:
   **not applied as a doc edit**.
 - `[propose-script]` — deterministic repeated prose → surfaced `scripts/` helper proposal;
   **not applied**.
+- `[owner-call]` — a real finding that must not be edited here: deletions needing human
+  judgment (tracked/regenerable data), evidence-grade do-not-rewrite files, files owned by a
+  concurrent session. Reported with evidence; **never applied**.
 
 ---
 

@@ -128,6 +128,42 @@ class MissingInstructionFileReportTests(unittest.TestCase):
             ],
         )
 
+    def test_docreview_ignore_file_extends_ignored_dirs(self) -> None:
+        """Local customization must extend the walkers without patching the script."""
+        docreview = load_docreview_module()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "CLAUDE.md").write_text("root\n", encoding="utf-8")
+            # Trailing slash (gitignore muscle memory), a leading BOM, trailing
+            # comments, blanks, and a path-shaped entry that must warn+skip.
+            (root / ".docreview-ignore").write_text(
+                "# generated output\n"
+                "\n"
+                "generated/\n"
+                "\ufeffbomdir\n"
+                "worktrees/  # agent checkouts\n"
+                "src/pkg  # path-shaped, never matches a dir name\n",
+                encoding="utf-8",
+            )
+            generated = root / "generated"
+            generated.mkdir()
+            (generated / "CLAUDE.md").write_text("stale artifact\n", encoding="utf-8")
+            (root / "src").mkdir()
+
+            extra = docreview.load_extra_ignores(root)
+            gaps = list(docreview.iter_instruction_file_gaps(root, []))
+            docs = list(docreview.iter_markdown_docs(root, []))
+            scoped = list(docreview.iter_scoped_claude_files(root, []))
+
+        self.assertEqual(extra, {"generated", "bomdir", "worktrees"})
+        gap_dirs = [gap.relative_dir.as_posix() for gap in gaps]
+        self.assertIn("src", gap_dirs)
+        self.assertNotIn("generated", gap_dirs)
+        self.assertIn("CLAUDE.md", [path.name for path in docs])
+        self.assertFalse(any("generated" in path.parts for path in docs))
+        self.assertFalse(any("generated" in path.parts for path in scoped))
+
     def test_missing_command_honors_custom_path_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -525,6 +561,52 @@ class SizeMeasurementTests(unittest.TestCase):
         self.assertIn("[Root] CLAUDE.md", result.stdout)
         self.assertIn("- OVER", result.stdout)
         self.assertNotIn("docreview: PASS", result.stdout)
+
+    def test_debt_command_lists_within_slack_and_exits_zero(self) -> None:
+        """debt is the durable artifact for soft flags - report-only, exit 0."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            # 8,000 chars / 2.5 = 3,200 tokens: over the 2,500 root budget,
+            # under the 1.5x hard line - exactly the WITHIN-SLACK band.
+            (root / "CLAUDE.md").write_text("x" * 8_000 + "\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(script_path), "debt"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("[Root] CLAUDE.md", result.stdout)
+        self.assertIn("WITHIN-SLACK", result.stdout)
+        self.assertIn("1.28x", result.stdout)
+        self.assertNotIn("- PASS", result.stdout)
+
+    def test_debt_command_exits_zero_even_on_over_files(self) -> None:
+        """debt reports OVER debt but stays report-only - check is the gate."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script_path = root / "scripts" / "docreview.py"
+            script_path.parent.mkdir()
+            shutil.copy2(SCRIPT_PATH, script_path)
+            (root / "CLAUDE.md").write_text("x" * 50_000 + "\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, str(script_path), "debt"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertIn("OVER", result.stdout)
+        self.assertIn("8.00x", result.stdout)
 
     def test_umbrella_claude_md_gets_the_wider_budget(self) -> None:
         docreview = load_docreview_module()

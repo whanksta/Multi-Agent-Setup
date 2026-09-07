@@ -14,13 +14,17 @@ before committing instruction-file changes or whenever a doc looks bloated/stale
 Choose one doctrine mode after Part 1:
 
 - **Full doc review** — use when the user asks for a full / repo-wide / all-docs audit, before a
-  release, or before committing documentation-system changes. Audit every repo-owned Markdown doc
-  exactly once: `CLAUDE.md`, `CLAUDE.local.md` if present, scoped `*/CLAUDE.md`,
+  release, or before committing documentation-system changes. Inventory every repo-owned Markdown
+  doc exactly once (per-file audit depth may be sampled — attest it in Coverage):
+  `CLAUDE.md`, `CLAUDE.local.md` if present, scoped `*/CLAUDE.md`,
   `.claude/rules/*.md`, `.claude/skills/**/*.md`, top-level docs such as `README.md` /
   `CHANGELOG.md`, and anything under `docs/`.
 - **Scoped doc review** — use when the user names a path, glob, skill, subsystem, or asks to review
   recent/touched docs. Audit only that target set plus any docs it directly links to or depends on
   for doctrine. State the chosen scope before inventorying it.
+- **Archive-tree review** — use when the target set is a dated work-product tree (completed
+  plans, task artifacts, generated reports): audit for honest deadness per the doctrine's
+  *Archive trees* mode — status banners and inbound-link sweeps, not freshness edits.
 
 Exclude generated/dependency dirs and symlink mirrors in both modes. **Never audit `AGENTS.md` as
 its own file — it's a symlink to `CLAUDE.md`. Never audit `.agents/skills` separately — it's a
@@ -58,9 +62,8 @@ If the user only asked to "check the wiring," stop here.
 ## Optional — Missing scoped-file inventory
 
 Use this when the user asks which folders do not have `CLAUDE.md` and/or `AGENTS.md`. This is
-report-only; missing scoped files are not automatically defects. Create a scoped `CLAUDE.md` only
-when the folder has a real convention or foot-gun, then run the normal wiring check to create or
-repair that folder's `AGENTS.md` symlink.
+report-only; missing scoped files are not automatically defects — create a scoped `CLAUDE.md`
+only when the folder has a real convention or foot-gun.
 
 Choose the smallest useful scope:
 
@@ -71,16 +74,10 @@ python3 scripts/docreview.py missing --scope worktree
 python3 scripts/docreview.py missing --scope path --path path/to/subtree
 ```
 
-- `missing` defaults to the project that owns `scripts/docreview.py`, independent of the current
-  working directory.
-- `--scope repo` / `--scope whole-repo` reports the repo that owns `scripts/docreview.py`; use this
-  only when the user asks for source-repo-wide coverage.
-- `--scope worktree` reports the current Git worktree and fails when the current directory is not
-  inside Git.
-- `--scope path --path ...` reports an arbitrary custom subtree without requiring root wiring there.
-
-The output is a prompt to consider whether a scoped `CLAUDE.md` is warranted, not a mandate to add
-one.
+- Default (and `--scope repo` / `--scope whole-repo`) is the project that owns
+  `scripts/docreview.py`, independent of the current directory; `--scope worktree` is the
+  current Git worktree (fails outside one); `--scope path --path ...` is any custom subtree
+  without requiring root wiring there.
 
 ---
 
@@ -98,7 +95,8 @@ Procedure:
 2. **Inventory.** List in-scope files with estimated token cost vs budget. Print it first — a
    silent scope expansion is the most common failure mode. For always-loaded files, reuse the
    counts + verdicts the Part 1 script just printed (budget tiers: `reference/doctrine.md` →
-   Size budgets). For full doc review, measure every other in-scope Markdown doc (no ceiling):
+   Size budgets; soft debt between runs: `python3 scripts/docreview.py debt`). For full doc
+   review, measure every other in-scope Markdown doc (no ceiling):
    ```bash
    python3 scripts/docreview.py tokens
    ```
@@ -132,6 +130,12 @@ Mode: full doc review
 |------|-------------|--------|---------|
 | CLAUDE.md | 850 | ≤2500 | PASS |
 
+### Coverage
+| File-set | How read |
+|----------|----------|
+| .claude/skills/** | read-fully |
+| docs/archive/** | sampled: every index doc + every 5th body |
+
 ### Findings
 | Sev | Axis | File:line | Catch | Fix (class) |
 |-----|------|-----------|-------|-------------|
@@ -141,14 +145,34 @@ Mode: full doc review
 Verdict: N blockers, M should-fix, K nits — + the single highest-leverage change.
 ```
 
-Clean axes: write `clean` or omit the row. Don't inflate nits.
+Clean axes: write `clean` or omit the row. Don't inflate nits. Sampling is fine — **silent**
+sampling reads as full coverage: attest per file-set (read-fully / sampled + strategy /
+parity-checked — confirmed identical through both of its paths / verified-by-grep-only).
 
 ### Scaling
 
-At a handful of docs, audit inline. If the doc tree grows past ~15 files, fan out: one sub-agent
-per cluster (root / scoped / docs), each reading `reference/doctrine.md` first and returning
-ranked findings; then dedupe and apply. Keep live-state verification (axis 8 against any MCP/API)
-to a single agent so the audit stays reproducible.
+At a handful of docs, audit inline. Past ~15 files, fan out: clusters of ~50–60 docs each
+(by count — the fixed root/scoped/docs triple mis-sizes real trees), one fresh-context
+sub-agent per cluster. Sub-agents load no `CLAUDE.md` — prepend this preamble to each
+dispatch, then the cluster's file list:
+
+```text
+Audit the listed docs against doctrine. Rules:
+- Each file once, via its canonical path: CLAUDE.md, not the AGENTS.md symlink;
+  .claude/skills/**, not the .agents/skills mirror. Ignore stale worktree/duplicate copies —
+  the dispatcher's list (dependency docs already folded in) is the whole inventory; do not
+  expand it.
+- Read .claude/skills/docreview/reference/doctrine.md first; run every axis with its verify
+  command; verify every count/path/claim against reality.
+- Return ranked findings only, one row each: | Sev | Axis | File:line | Catch | Fix (class) |
+  with doctrine fix-classes. Propose edits; do not apply them.
+- You have ample context remaining: do not stop, summarize, or suggest a new session on
+  account of context limits.
+```
+
+Dedupe and apply centrally. Keep live-state verification (axis 8 against any MCP/API) to a single
+agent so the audit stays reproducible. In a shared tree, apply agents stage explicit pathspecs —
+foreign staged files are another session's work-in-progress; never `git add -A`.
 
 ---
 
@@ -172,7 +196,8 @@ to a single agent so the audit stays reproducible.
 - For wiring/doctrine requests, ran Part 1 and confirmed `PASS` (or surfaced the clobbered backup)?
 - Stated `full doc review` or `scoped doc review` and listed the target set?
 - Printed the inventory + per-file verdict before auditing?
-- Audited every in-scope Markdown doc exactly once, excluding `AGENTS.md` and `.agents/skills`?
+- Inventoried every in-scope Markdown doc exactly once (excluding `AGENTS.md` and
+  `.agents/skills`), with per-file-set coverage attested?
 - Ran every axis with its verify command — not from memory?
 - Every finding cites `file:line`, names its axis, carries a fix-class, has a severity?
 - Verified every count/path/claim I flagged (or relied on) against reality?

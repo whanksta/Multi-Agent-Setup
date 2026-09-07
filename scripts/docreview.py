@@ -72,6 +72,11 @@ IGNORED_DIRS = {
     "venv",
 }
 
+# Local customization lives in <scope root>/.docreview-ignore so adopters
+# never patch this script: a patch dies on the next byte-exact copy. One
+# directory name per line (matched at any depth, like IGNORED_DIRS);
+# blank lines and #-comments (full-line or trailing) are skipped.
+
 
 class InstructionFileGap(NamedTuple):
     """Instruction files missing from one directory in a report scope."""
@@ -217,10 +222,53 @@ def walk_reporting_errors(root_dir: Path, scan_errors: list[str]):
     yield from os.walk(root_dir, onerror=record)
 
 
+# Loaded once per scope root per run; a `check` run walks via several
+# iterators and must not re-read the file (or re-print its warnings).
+_EXTRA_IGNORES_CACHE: dict = {}
+
+
+def load_extra_ignores(root_dir: Path) -> set:
+    """Return directory names from <scope root>/.docreview-ignore, else empty.
+
+    One name per line, matched at any depth like IGNORED_DIRS; blank lines and
+    #-comments (full-line or trailing) are skipped. A mis-parsed entry would
+    under-ignore - the dangerous direction for a gate - so gitignore-style
+    trailing slashes and a leading BOM are normalized, path-shaped entries WARN
+    and are dropped, and an unreadable file WARNs and keeps built-ins only.
+    """
+    cache_key = str(root_dir.resolve())
+    if cache_key in _EXTRA_IGNORES_CACHE:
+        return _EXTRA_IGNORES_CACHE[cache_key]
+
+    names: set = set()
+    ignore_file = root_dir / ".docreview-ignore"
+    if os.path.lexists(ignore_file):
+        try:
+            lines = ignore_file.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except OSError as exc:
+            print(f"  WARN  Could not read {ignore_file}: {exc} - extra ignores NOT loaded.")
+        else:
+            for raw in lines:
+                name = raw.split("#", 1)[0].strip().strip("/").lstrip("\ufeff").strip()
+                if not name:
+                    continue
+                if "/" in name or "\\" in name:
+                    print(
+                        f"  WARN  .docreview-ignore entry {name!r} is a path, not a "
+                        "directory name - skipped."
+                    )
+                    continue
+                names.add(name)
+
+    _EXTRA_IGNORES_CACHE[cache_key] = names
+    return names
+
+
 def iter_scoped_claude_files(root_dir: Path, scan_errors: list[str]):
     """Yield non-root CLAUDE.md files, skipping generated/dependency dirs."""
+    ignored = IGNORED_DIRS | load_extra_ignores(root_dir)
     for dirpath, dirnames, filenames in walk_reporting_errors(root_dir, scan_errors):
-        dirnames[:] = sorted(name for name in dirnames if name not in IGNORED_DIRS)
+        dirnames[:] = sorted(name for name in dirnames if name not in ignored)
 
         path = Path(dirpath)
         if path == root_dir:
@@ -232,11 +280,12 @@ def iter_scoped_claude_files(root_dir: Path, scan_errors: list[str]):
 
 def iter_instruction_file_gaps(root_dir: Path, scan_errors: list[str]):
     """Yield directories in scope that lack CLAUDE.md and/or AGENTS.md."""
+    ignored = IGNORED_DIRS | load_extra_ignores(root_dir)
     for dirpath, dirnames, _filenames in walk_reporting_errors(root_dir, scan_errors):
         dirnames[:] = sorted(
             name
             for name in dirnames
-            if name not in IGNORED_DIRS and not (Path(dirpath) / name).is_symlink()
+            if name not in ignored and not (Path(dirpath) / name).is_symlink()
         )
 
         path = Path(dirpath)
@@ -487,6 +536,15 @@ def audit_wiring(root_dir: Path, timestamp: str) -> int:
     return status
 
 
+def classify_budget_verdict(size: DocSize, budget: int) -> str:
+    """Return PASS / WITHIN-SLACK / OVER for one measured doc."""
+    if size.tokens <= budget:
+        return "PASS"
+    if size.tokens < budget * 1.5:
+        return "WITHIN-SLACK"
+    return "OVER"
+
+
 def print_budget_verdict(
     label: str,
     rel_path: Path | str,
@@ -499,11 +557,12 @@ def print_budget_verdict(
         f"(budget <= {budget}, {size.lines} non-blank lines)"
     )
 
-    if size.tokens <= budget:
+    verdict = classify_budget_verdict(size, budget)
+    if verdict == "PASS":
         print(prefix.format(level="ok") + " - PASS")
         return 0
 
-    if size.tokens < budget * 1.5:
+    if verdict == "WITHIN-SLACK":
         print(prefix.format(level="WARN") + " - WITHIN-SLACK")
         return 0
 
@@ -574,22 +633,19 @@ def audit_version_stamp(root_dir: Path) -> int:
     return 1
 
 
-def audit_budgets(root_dir: Path) -> int:
-    """Part 2: Audit estimated token cost against size budgets."""
-    status = 0
-    print("\ndocreview: checking size budgets (estimated tokens; lines advisory)")
+def iter_budget_targets(root_dir: Path, scan_errors: list[str]):
+    """Yield (label, rel_path, file_path, budget) for every always-loaded doc.
 
+    Single discovery order shared by the check gate and the debt report so the
+    two can never disagree about what is in scope.
+    """
     root_claude = root_dir / "CLAUDE.md"
-    status |= budget_verdict("Root", root_claude.name, root_claude, BUDGET_ROOT_TOKENS)
+    yield ("Root", root_claude.name, root_claude, BUDGET_ROOT_TOKENS)
 
-    scan_errors: list[str] = []
     scoped_files = list(iter_scoped_claude_files(root_dir, scan_errors))
-    for scan_error in scan_errors:
-        print(f"  FAIL  Could not scan {scan_error} - budgets there are UNCHECKED.")
-        status = 1
     for scoped_claude in scoped_files:
         umbrella = is_umbrella(scoped_claude, scoped_files)
-        status |= budget_verdict(
+        yield (
             "Umbrella" if umbrella else "Scoped",
             relative(scoped_claude, root_dir),
             scoped_claude,
@@ -599,14 +655,61 @@ def audit_budgets(root_dir: Path) -> int:
     rules_dir = root_dir / ".claude" / "rules"
     if rules_dir.is_dir():
         for rules_file in sorted(rules_dir.rglob("*.md")):
-            status |= budget_verdict(
-                "Rule",
-                relative(rules_file, root_dir),
-                rules_file,
-                BUDGET_RULES_TOKENS,
-            )
+            yield ("Rule", relative(rules_file, root_dir), rules_file, BUDGET_RULES_TOKENS)
+
+
+def audit_budgets(root_dir: Path) -> int:
+    """Part 2: Audit estimated token cost against size budgets."""
+    status = 0
+    print("\ndocreview: checking size budgets (estimated tokens; lines advisory)")
+
+    scan_errors: list[str] = []
+    for label, rel_path, file_path, budget in iter_budget_targets(root_dir, scan_errors):
+        status |= budget_verdict(label, rel_path, file_path, budget)
+    for scan_error in scan_errors:
+        print(f"  FAIL  Could not scan {scan_error} - budgets there are UNCHECKED.")
+        status = 1
 
     return status
+
+
+def print_debt_report(root_dir: Path) -> int:
+    """List files carrying budget debt (WITHIN-SLACK or OVER) with ratios.
+
+    Report-only, always exits 0 - the `check` command stays the gate. WITHIN-SLACK
+    flags printed nothing durable between runs; this is the artifact the next
+    pass (or CI) picks up.
+    """
+    print(f"docreview: budget debt report for {root_dir}")
+
+    scan_errors: list[str] = []
+    found_debt = False
+    for label, rel_path, file_path, budget in iter_budget_targets(root_dir, scan_errors):
+        size = measure(file_path)
+        if size is None:
+            print(f"  ERROR [{label}] {rel_path} could not be read - debt UNKNOWN.")
+            found_debt = True
+            continue
+
+        verdict = classify_budget_verdict(size, budget)
+        if verdict == "PASS":
+            continue
+
+        ratio = size.tokens / budget
+        print(
+            f"  [{label}] {rel_path} ~{size.tokens} tok (budget <= {budget}) "
+            f"{ratio:.2f}x - {verdict}"
+        )
+        found_debt = True
+
+    for scan_error in scan_errors:
+        print(f"  WARN  Could not scan {scan_error} - debt there is UNKNOWN.")
+        found_debt = True
+
+    if not found_debt:
+        print("  ok    no WITHIN-SLACK or OVER files - no budget debt")
+    print("  note  WITHIN-SLACK = over budget but < 1.5x (soft debt); OVER = the gate fails it.")
+    return 0
 
 
 def repo_root_from_script() -> Path:
@@ -685,11 +788,12 @@ def print_missing_instruction_report(root_dir: Path) -> int:
 
 def iter_markdown_docs(root_dir: Path, scan_errors: list[str]):
     """Yield repo-owned Markdown docs, skipping symlink mirrors and vendored dirs."""
+    ignored = IGNORED_DIRS | load_extra_ignores(root_dir)
     for dirpath, dirnames, filenames in walk_reporting_errors(root_dir, scan_errors):
         dirnames[:] = sorted(
             name
             for name in dirnames
-            if name not in IGNORED_DIRS and not (Path(dirpath) / name).is_symlink()
+            if name not in ignored and not (Path(dirpath) / name).is_symlink()
         )
 
         path = Path(dirpath)
@@ -745,11 +849,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=("check", "missing", "tokens"),
+        choices=("check", "missing", "tokens", "debt"),
         default="check",
         help=(
             "check repairs wiring and budgets; missing reports directories without "
-            "both files; tokens reports estimated context cost per doc"
+            "both files; tokens reports estimated context cost per doc; debt lists "
+            "WITHIN-SLACK/OVER files with ratios (report-only)"
         ),
     )
     parser.add_argument(
@@ -789,6 +894,9 @@ def main() -> None:
 
     if args.command == "tokens":
         sys.exit(print_token_report(root_dir, args.paths))
+
+    if args.command == "debt":
+        sys.exit(print_debt_report(root_dir))
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 

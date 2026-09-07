@@ -20,10 +20,12 @@
 - Start with just root `CLAUDE.md`. Add a scoped `CLAUDE.md` to a folder/subsystem **when it grows a
   convention or foot-gun not obvious from its code, or when root crosses its token budget** and a
   section is folder-specific. If you can't name the reason in one sentence, don't create the file.
-- Scoped files **point to** root doctrine — never restate it. Keep each ≤ 1,000 est. tokens.
-- Keep root `CLAUDE.md` under 2,500 est. tokens; push heavy content into `docs/` or a skill.
-  **Budget tokens, not lines** — a wide table row can cost 300+ on its own. Check with
-  `python3 scripts/docreview.py tokens`.
+- Scoped files **point to** root doctrine — never restate it, numbers included: figures owned
+  elsewhere (budgets, tiers, constants) get a pointer plus the command that re-derives them.
+- Keep root and scoped files inside the docreview budget tiers — `python3 scripts/docreview.py`
+  gates them (tiers explained in `.claude/skills/docreview/reference/doctrine.md`). Push heavy
+  content into `docs/` or a skill. **Budget tokens, not lines** — a wide table row can cost 300+
+  on its own. Check with `python3 scripts/docreview.py tokens`.
 - Prefer deleting to adding. Current frontier models self-verify and read context — rules like
   "double-check your work", restated directory trees, and dependency lists cost adherence
   without buying anything.
