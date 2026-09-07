@@ -8,6 +8,11 @@ batches available once committed. A batch that changes budget tiers, `CHARS_PER_
 umbrella/scoped classification rule must say so in its Adoption Notes — those changes silently
 move adopters' files between budgets.
 
+**Which batches apply to you:** exactly those dated after your marker — `.claude/.mas-version`,
+or root `VERSION` on template-button adoptions. If the marker equals the newest batch above,
+you are current: report "up to date" and apply nothing. Never re-apply batches at or before
+your marker.
+
 Historical entries were reconstructed from Git history through `7b20a84`.
 
 ## 2026-09-07
@@ -96,6 +101,14 @@ wiring checks. This batch closes the gaps that didn't.
   clarifying questions; its counter is "complete the work that is already authorized from
   context." And it tells previously-patched adopters to diff kit-owned files against the clone
   before copying, re-apply patches, and record them.
+- **Adoption prompt decides the situation mechanically (README step 2).** The agent no longer
+  infers whether an update applies: it runs a four-line marker comparison (`.claude/.mas-version`,
+  falling back to root `VERSION`, vs the newest CHANGELOG batch heading) and acts on exactly one
+  of three outcomes — UP TO DATE reports "already on <version>, nothing to apply" and skips the
+  install steps entirely; FRESH installs (an existing `docreview.py` with no marker is an
+  unstamped old install, treated as fresh); UPDATE applies precisely the batches dated after the
+  marker, oldest first. The CHANGELOG header now states the same applicability rule for agents
+  that open this file first.
 - **Changelog convention:** any batch that changes budget tiers, `CHARS_PER_TOKEN`, or the
   umbrella/scoped classification rule must say so in its Adoption Notes (stated in the header
   prose above).

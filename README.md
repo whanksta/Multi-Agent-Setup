@@ -78,17 +78,23 @@ https://github.com/whanksta/Multi-Agent-Setup.
    Read /tmp/mas/README.md and /tmp/mas/CHANGELOG.md for guidance only. Never copy the source's
    README.md or CHANGELOG.md into my repo unless I explicitly ask.
 
-2. DETECT THE SITUATION:
-   - My repo already has scripts/docreview.py  ->  UPDATE: read .claude/.mas-version, then apply
-     only the CHANGELOG batches dated newer than it. If .claude/.mas-version is missing but root
-     VERSION exists (template-button adoption), use VERSION as the baseline and stamp
-     .claude/.mas-version from it.
-   - My repo has other instruction files (a real AGENTS.md, .cursorrules, GEMINI.md, scattered rule
-     docs)  ->  PRE-CONSOLIDATE: fold their active rules into one canonical CLAUDE.md, dedupe, and
-     preserve my conventions; then remove the redundant copies — agent-instruction files only
-     (the real AGENTS.md, .cursorrules, GEMINI.md, rule docs whose content you folded in). Never
-     delete human-facing docs (README, docs/ handbooks); leave them in place.
-   - Neither  ->  FRESH install.
+2. DETERMINE THE SITUATION IMMEDIATELY — run this, do not infer it:
+       MARKER=.claude/.mas-version
+       [ -f "$MARKER" ] || MARKER=VERSION          # template-button adoptions carry root VERSION
+       ADOPTED=$(cat "$MARKER" 2>/dev/null || echo none)
+       NEWEST=$(grep -m1 -E '^## [0-9]{4}-[0-9]{2}-[0-9]{2}$' /tmp/mas/CHANGELOG.md | cut -d' ' -f2)
+   Act on exactly one outcome:
+   - ADOPTED = NEWEST  ->  UP TO DATE: report "already on <NEWEST>, nothing to apply" and STOP —
+     skip steps 3-6 entirely.
+   - ADOPTED = none    ->  FRESH install (if scripts/docreview.py exists but no marker does, it is
+     an unstamped old install — treat it as fresh; step 5 stamps the marker).
+   - anything else     ->  UPDATE: apply exactly the CHANGELOG batches dated after ADOPTED, oldest
+     first, newest last. Batches at or before ADOPTED are already installed — never re-apply them.
+   Separately, if my repo has other instruction files (a real AGENTS.md, .cursorrules, GEMINI.md,
+   scattered rule docs)  ->  PRE-CONSOLIDATE: fold their active rules into one canonical CLAUDE.md,
+   dedupe, and preserve my conventions; then remove the redundant copies — agent-instruction files
+   only (the real AGENTS.md, .cursorrules, GEMINI.md, rule docs whose content you folded in). Never
+   delete human-facing docs (README, docs/ handbooks); leave them in place.
 
 3. REPLICATE KIT-OWNED FILES EXACTLY from /tmp/mas (see the Adoption File Policy table for the full
    list + per-file action): scripts/docreview.py, .claude/skills/docreview/,
@@ -354,7 +360,9 @@ the durable unit; the repo is.
 
 On install the agent stamps `.claude/.mas-version` with the kit's `VERSION`. On the next update it
 reads that marker and applies only the `CHANGELOG.md` batches dated newer than it, then re-stamps —
-so updates are incremental and you can see exactly which version a repo is on.
+so updates are incremental and you can see exactly which version a repo is on. If the marker
+already equals the newest batch, the agent reports "up to date" and stops — no update is inferred
+or attempted.
 
 ## License
 
