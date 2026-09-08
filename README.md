@@ -5,6 +5,7 @@ Claude Code, Codex, and Antigravity all read, and **`codebase-audit`**, a determ
 health signal your agents run before touching risky code.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
+[![CI](https://github.com/whanksta/Multi-Agent-Setup/actions/workflows/ci.yml/badge.svg)](https://github.com/whanksta/Multi-Agent-Setup/actions/workflows/ci.yml)
 [![Use this template](https://img.shields.io/badge/Use%20this%20template-2ea44f?logo=github&logoColor=white)](https://github.com/whanksta/Multi-Agent-Setup/generate)
 [![works with](https://img.shields.io/badge/works%20with-Claude%20Code,%20Codex,%20Antigravity-blue)](#compatibility)
 
@@ -20,7 +21,8 @@ what to do — **clone this repo for the exact files**, replicate the kit-owned 
 `CLAUDE.md`, and run `python3 scripts/docreview.py`. The README and changelog are guidance for
 adoption only; the agent reads them but does not copy them into your repo unless you ask.
 
-[Changelog](CHANGELOG.md) | [Quick start](#quick-start) | [Manual install](#manual-install)
+[Changelog](CHANGELOG.md) | [Quick start](#quick-start) | [What you get](#what-you-get) |
+[How it works](#how-it-works) | [Manual install](#manual-install) | [FAQ](#faq)
 
 ## Why This Exists
 
@@ -40,9 +42,9 @@ This kit ships two core capabilities:
    symlinks so every agent reads the same bytes; `docreview` verifies and repairs that wiring and
    audits the docs for drift.
 2. **`codebase-audit`** — a deterministic, repo-agnostic structural-health signal. It decomposes
-   size, and layers in the git-temporal signals (churn, hotspot, temporal coupling) that actually
-   predict where defects accrue, so an agent gets the wide quantitative picture before it judges
-   what to refactor.
+   file size and layers in the git-temporal signals (churn, hotspots, temporal coupling) that
+   actually predict where defects accrue, so an agent gets the wide quantitative picture before
+   it judges what to refactor.
 
 `codebase-audit` is **signal, not a gate** by design: it emits ranked evidence, never a pass/fail
 verdict, so it informs judgment instead of blocking work. That is a feature — the agent stays in
@@ -52,16 +54,19 @@ control — not a disclaimer.
 
 Two ways in. For a brand-new repo, use the GitHub template button — no agent needed. For an existing
 project (or to update an installed one), paste the single adoption prompt below; it detects which
-situation you're in and adapts.
+situation you're in and adapts. Either way you need Git and Python 3.8+ (`docreview.py` alone runs
+on 3.7+).
 
 ### New repo (template button)
 
 Click **[Use this template](https://github.com/whanksta/Multi-Agent-Setup/generate)**, edit
 `CLAUDE.md` with your project's real rules, then run `python3 scripts/docreview.py` and expect
-`docreview: PASS`. The template also ships the kit's `tests/`, `README.md`, `CHANGELOG.md`, and
-`LICENSE` — keep or delete them freely (they are source-repo artifacts, not wiring). When you
-later update via the one-prompt flow, the shipped root `VERSION` is your baseline: the agent
-stamps `.claude/.mas-version` from it on the first update.
+`docreview: PASS`.
+
+The template is a full copy, so it also ships the kit's source-repo artifacts — `tests/`,
+`README.md`, `CHANGELOG.md`, `LICENSE`, and `.github/` (CI). Keep or delete them freely; they
+are not wiring. When you later update via the one-prompt flow, the shipped root `VERSION` is your
+baseline: the agent stamps `.claude/.mas-version` from it on the first update.
 
 ### Existing or installed repo (one prompt)
 
@@ -151,6 +156,7 @@ The agent's per-file contract. "Copy exactly" means byte-for-byte from the clone
 | `.githooks/pre-commit` | Copy exactly (enable with `git config core.hooksPath .githooks`). |
 | `VERSION` | Copy its value into the target as `.claude/.mas-version` to record the adopted version. Do not plant a root `VERSION` in the target. |
 | `tests/` | Source-repo regression suite for the scripts. Do not copy during adoption; template-button repos inherit it and may keep or delete it. |
+| `.github/` | Source-repo CI workflow for the test suite. Do not copy during adoption; template-button repos inherit it and may keep or delete it. |
 | `.gitignore` | Add required entries such as `CLAUDE.local.md`, `*.clobbered-*`, `__pycache__/`, and `*.py[cod]`; preserve unrelated target entries. |
 | `CLAUDE.md` | Merge/blend wiring guidance with existing project instructions; never overwrite project rules blindly. |
 | `AGENTS.md` | Create as a relative symlink to `CLAUDE.md` after consolidating existing agent rules. |
@@ -166,6 +172,7 @@ The agent's per-file contract. "Copy exactly" means byte-for-byte from the clone
 | `.agents/skills` | Folder symlink to `.claude/skills`. |
 | `scripts/docreview.py` | Verifies and repairs wiring; checks instruction-file size budgets in estimated tokens; `debt` reports soft budget debt; `.docreview-ignore` holds local extra ignores. |
 | `.githooks/pre-commit` | Optional Git hook running `docreview` (gate) + `codebase-audit --staged` (advisory) before each commit. |
+| `.github/workflows/ci.yml` | CI for this source repo: runs the test suite on push and pull request. Inherited by template-button copies; not copied by one-prompt adoption. |
 | `.claude/skills/docreview/` | Agent skill for wiring checks and doc-doctrine review. |
 | `.claude/skills/codebase-audit/` | Core agent skill + script for structural hotspot/churn signals (advisory, not a gate). |
 | `VERSION` | Kit version string; copied into an adopting repo as `.claude/.mas-version`. |

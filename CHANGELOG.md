@@ -15,6 +15,40 @@ your marker.
 
 Historical entries were reconstructed from Git history through `7b20a84`.
 
+## 2026-09-08
+
+Landing-page modernization pass: CI for the source repo plus README clarity fixes. No wiring,
+script, or budget changes.
+
+### Added
+
+- **CI workflow (`.github/workflows/ci.yml`).** Runs the stdlib test suite on pushes to `main`
+  and on pull requests (single Python 3.12 job, ubuntu-latest). Skips with a note instead of
+  failing when `tests/` is absent, so template-button adopters who deleted the suite keep a
+  green run. Adoption status matches `tests/`: not copied by the one-prompt flow;
+  template-button repos inherit it and may keep or delete it. The README badge row gained the
+  matching CI badge.
+
+### Changed
+
+- README Quick Start states prerequisites up front — Git and Python 3.8+ (`docreview.py` alone
+  runs on 3.7+) — instead of leaving the per-script floors buried in the `docreview` section.
+- README quick-links line now indexes the main sections (What You Get, How It Works, FAQ)
+  alongside Changelog/Quick start/Manual install.
+- Two Pillars' `codebase-audit` sentence reworded: the old "It decomposes size, and layers in"
+  comma splice read as two actions; now one verb pair ("decomposes file size and layers in"),
+  and "hotspot" → "hotspots".
+- Template-button Quick Start split into two paragraphs (setup vs inherited artifacts) and now
+  enumerates `.github/` among the source-repo artifacts; the Adoption File Policy and What You
+  Get tables gained matching `.github/` rows.
+
+### Adoption Notes
+
+- One-prompt updates: nothing to apply — the README changes are source-side guidance and the
+  CI workflow is not part of the copied kit. Installed repos can skip this batch.
+- Template-button adoptions from this batch on inherit `.github/workflows/ci.yml`; keep or
+  delete it together with the other source-repo artifacts.
+
 ## 2026-09-07
 
 Stress-test feedback from updating an adopted repo ~2 months / 3 batches behind HEAD (~430
